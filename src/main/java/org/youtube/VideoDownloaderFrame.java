@@ -20,12 +20,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-
 /**
  * VideoDownloaderFrame is a GUI class for downloading videos from YouTube.
  * It provides a simple interface for entering a video URL, and buttons to download the video
  * and clear the entered URL.
- *
+ * <p>
  * VideoDownloaderFrame - это класс графического интерфейса пользователя для скачивания видео с YouTube.
  * Он предоставляет простой интерфейс для ввода URL видео и кнопки для скачивания видео и очистки введенного URL.
  */
