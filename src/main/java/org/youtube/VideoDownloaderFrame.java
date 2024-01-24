@@ -190,7 +190,7 @@ public class VideoDownloaderFrame extends JFrame {
     /**
      * Downloads the video from the given URL.
      * Handles all the logic and error cases for downloading a video.
-     *
+     * <p>
      * Скачивает видео по заданному URL.
      * Управляет всей логикой и обработкой ошибок при скачивании видео.
      */
