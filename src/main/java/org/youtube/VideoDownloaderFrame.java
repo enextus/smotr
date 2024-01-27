@@ -65,7 +65,10 @@ public class VideoDownloaderFrame extends JFrame {
     public VideoDownloaderFrame() {
         JButton downloadButton;
         JButton clearButton;
-        JButton openFolderButton; // Добавленная кнопка
+
+        // Добавленная кнопка
+        // Added button
+        JButton openFolderButton;
 
         setTitle(VIDEO_DOWNLOADER);
         setSize(WIDTH1, HEIGHT1);
