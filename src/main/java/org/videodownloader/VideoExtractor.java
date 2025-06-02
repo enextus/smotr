@@ -13,11 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class VideoExtractor {
-    /**
-     * Extracts the direct video URL from a webpage by finding an embed URL and intercepting network requests.
-     * @param pageUrl The URL of the page containing the video embed.
-     * @return The direct video URL (e.g., ending with .mp4/?...) or null if not found.
-     */
+
     public static String extractVideoUrl(String pageUrl) {
         // Set the path to the ChromeDriver executable
         System.setProperty("webdriver.chrome.driver", "C:/opt/chromedriver/chromedriver.exe");
