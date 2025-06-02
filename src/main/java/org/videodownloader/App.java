@@ -1,4 +1,4 @@
-package org.youtube;
+package org.videodownloader;
 
 import javax.swing.*;
 
