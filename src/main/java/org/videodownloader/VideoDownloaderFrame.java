@@ -24,344 +24,431 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * VideoDownloaderFrame is a Swing-based GUI class for downloading videos from various websites.
- * It provides a user-friendly interface with a text field for entering a video URL and buttons
- * to initiate downloads, clear the input, select a download folder, or open the folder.
+ * VideoDownloaderFrame - это класс с графическим интерфейсом на основе Swing для загрузки видео с различных веб-сайтов.
+ * Он предоставляет удобный интерфейс с текстовым полем для ввода URL видео и кнопками для запуска загрузки,
+ * очистки ввода, выбора папки загрузки, открытия папки и отображения логов.
  */
 public class VideoDownloaderFrame extends JFrame {
-    // Default directory where downloaded videos will be saved
+    // Путь по умолчанию для сохранения загруженных видео
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
 
-    // Constants for user-facing messages and error handling
-    public static final String DOWNLOAD_COMPLETE = "Download complete";
-    public static final String INTERRUPTED = "Interrupted: ";
-    public static final String INVALID_URL_PLEASE_CHECK_AND_TRY_AGAIN = "Invalid URL. Please check and try again.";
-    public static final String PLEASE_ENTER_A_URL = "Please enter a URL.";
-    public static final String ERROR2 = "Error";
-    public static final String URL = "url: ";
-    public static final String ERROR3 = "Error";
-    public static final String ERROR_CREATING_DIRECTORY = "Error creating directory: ";
-    public static final String COPY = "Copy";
-    public static final String PASTE = "Paste";
-    public static final String CUT = "Cut";
-    public static final String YT_DLP = "yt-dlp"; // Command-line tool for downloading videos
-    public static final String O = "-o"; // Output option for yt-dlp
-    public static final String TITLE_S_EXT_S = "%(title)s.%(ext)s"; // Filename template for yt-dlp
-    public static final String ENTER_THE_VIDEO_URL = "Enter the video URL";
-    public static final String CLEAR = "Clear";
-    public static final String DOWNLOAD = "Download";
-    public static final String SELECT_DOWNLOAD_FOLDER = "Select Download Folder";
-    public static final int WIDTH1 = 500; // Window width in pixels
-    public static final int HEIGHT1 = 120; // Window height in pixels
-    public static final String VIDEO_DOWNLOADER = "Video Downloader"; // Window title
+    // Константы для сообщений пользователю и обработки ошибок
+    public static final String DOWNLOAD_COMPLETE = "Download complete"; // Завершение загрузки
+    public static final String INTERRUPTED = "Interrupted: "; // Прерывание процесса
+    public static final String INVALID_URL_PLEASE_CHECK_AND_TRY_AGAIN = "Invalid URL. Please check and try again."; // Неверный URL
+    public static final String PLEASE_ENTER_A_URL = "Please enter a URL."; // Пустой URL
+    public static final String ERROR2 = "Error"; // Заголовок ошибки 2
+    public static final String URL = "url: "; // Префикс для вывода URL
+    public static final String ERROR3 = "Error"; // Заголовок ошибки 3
+    public static final String ERROR_CREATING_DIRECTORY = "Error creating directory: "; // Ошибка создания папки
+    public static final String COPY = "Copy"; // Копировать
+    public static final String PASTE = "Paste"; // Вставить
+    public static final String CUT = "Cut"; // Вырезать
+    public static final String YT_DLP = "yt-dlp"; // Инструмент командной строки для загрузки видео
+    public static final String O = "-o"; // Опция вывода для yt-dlp
+    public static final String TITLE_S_EXT_S = "%(title)s.%(ext)s"; // Шаблон имени файла для yt-dlp
+    public static final String ENTER_THE_VIDEO_URL = "Enter the video URL"; // Приглашение ввести URL
+    public static final String CLEAR = "Clear"; // Очистить
+    public static final String DOWNLOAD = "Download"; // Загрузить
+    public static final String SELECT_DOWNLOAD_FOLDER = "Select Download Folder"; // Выбрать папку загрузки
+    public static final String SHOW_LOGS = "Show Logs"; // Показать логи (новая константа)
+    public static final int WIDTH1 = 500; // Ширина окна в пикселях
+    public static final int HEIGHT1 = 120; // Высота окна в пикселях
+    public static final String VIDEO_DOWNLOADER = "Video Downloader"; // Заголовок окна
 
-    // GUI components
-    private final JTextField urlField; // Text field for entering the video URL
-    private JLabel infoLabel = null; // Label for displaying status messages
-    private String selectedOutputPath = DEFAULT_OUTPUT_PATH; // Current download directory
+    // Компоненты графического интерфейса
+    private final JTextField urlField; // Текстовое поле для ввода URL видео
+    private JLabel infoLabel = null; // Метка для отображения статусных сообщений
+    private String selectedOutputPath = DEFAULT_OUTPUT_PATH; // Текущая папка загрузки
+    private JFrame logFrame; // Окно для отображения логов (новое поле)
+    private JTextArea logTextArea; // Текстовая область для логов (новое поле)
 
     /**
-     * Constructor for VideoDownloaderFrame. Initializes the GUI components and sets up the layout.
+     * Конструктор для VideoDownloaderFrame. Инициализирует компоненты интерфейса и настраивает layout.
      */
     public VideoDownloaderFrame() {
-        // Declare buttons for download, clear, open folder, and select folder actions
+        // Объявляем кнопки для действий: загрузка, очистка, открытие папки, выбор папки и показ логов
         JButton downloadButton;
         JButton clearButton;
         JButton openFolderButton;
         JButton selectFolderButton;
+        JButton showLogsButton; // Новая кнопка для показа логов
 
-        // Set up the main window properties
-        setTitle(VIDEO_DOWNLOADER);
-        setSize(WIDTH1, HEIGHT1);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Close application on window close
-        setLocationRelativeTo(null); // Center the window on the screen
+        // Настройка свойств основного окна
+        setTitle(VIDEO_DOWNLOADER); // Устанавливаем заголовок окна
+        setSize(WIDTH1, HEIGHT1); // Устанавливаем размер окна
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Закрытие приложения при закрытии окна
+        setLocationRelativeTo(null); // Центрируем окно на экране
 
-        // Create the main panel with a BorderLayout
+        // Создаем основную панель с BorderLayout
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
 
-        // Initialize the URL text field and add a popup menu for copy/paste/cut
+        // Инициализируем текстовое поле URL и добавляем контекстное меню для копирования/вставки/вырезания
         urlField = new JTextField();
         createAndSetPopupMenu();
 
-        // Initialize the Download button and define its action
+        // Инициализируем кнопку "Download" и определяем её действие
         downloadButton = new JButton(DOWNLOAD);
-        downloadButton.addActionListener(e -> downloadVideo()); // Trigger video download on click
+        downloadButton.addActionListener(e -> downloadVideo()); // Запускаем загрузку видео при нажатии
 
-        // Initialize the Clear button and define its action
+        // Инициализируем кнопку "Clear" и определяем её действие
         clearButton = new JButton(CLEAR);
         clearButton.addActionListener(e -> {
-            urlField.setText(""); // Clear the URL text field
-            infoLabel.setText(ENTER_THE_VIDEO_URL); // Reset the status message
+            urlField.setText(""); // Очищаем текстовое поле URL
+            infoLabel.setText(ENTER_THE_VIDEO_URL); // Сбрасываем статусное сообщение
         });
 
-        // Initialize the Open Folder button and define its action
-        openFolderButton = new JButton("Открыть папку"); // Note: This label is in Russian
+        // Инициализируем кнопку "Открыть папку" и определяем её действие
+        openFolderButton = new JButton("Открыть папку");
         openFolderButton.addActionListener(e -> {
             try {
-                Desktop.getDesktop().open(new File(selectedOutputPath)); // Open the download folder
+                Desktop.getDesktop().open(new File(selectedOutputPath)); // Открываем папку загрузки
             } catch (IOException ioException) {
                 ioException.printStackTrace();
-                infoLabel.setText("Ошибка открытия папки: " + ioException.getMessage()); // Show error
+                infoLabel.setText("Ошибка открытия папки: " + ioException.getMessage()); // Показываем ошибку
             }
         });
 
-        // Initialize the Select Folder button and define its action
+        // Инициализируем кнопку "Select Download Folder" и определяем её действие
         selectFolderButton = new JButton(SELECT_DOWNLOAD_FOLDER);
-        selectFolderButton.addActionListener(e -> selectDownloadFolder()); // Open folder chooser
+        selectFolderButton.addActionListener(e -> selectDownloadFolder()); // Открываем выбор папки
 
-        // Initialize the status label
+        // Инициализируем кнопку "Show Logs" и определяем её действие
+        showLogsButton = new JButton(SHOW_LOGS);
+        showLogsButton.addActionListener(e -> showLogWindow()); // Открываем окно логов при нажатии
+
+        // Инициализируем метку статуса
         infoLabel = new JLabel(ENTER_THE_VIDEO_URL);
 
-        // Create a panel for buttons with a 4x1 grid layout
+        // Создаем панель для кнопок с сеткой 5x1 (добавляем одну строку для новой кнопки)
         JPanel eastPanel = new JPanel();
-        eastPanel.setLayout(new GridLayout(4, 1));
-        eastPanel.add(downloadButton);
-        eastPanel.add(clearButton);
-        eastPanel.add(openFolderButton);
-        eastPanel.add(selectFolderButton);
+        eastPanel.setLayout(new GridLayout(5, 1)); // Изменяем с 4 на 5 строк
+        eastPanel.add(downloadButton); // Добавляем кнопку "Download"
+        eastPanel.add(clearButton); // Добавляем кнопку "Clear"
+        eastPanel.add(openFolderButton); // Добавляем кнопку "Открыть папку"
+        eastPanel.add(selectFolderButton); // Добавляем кнопку "Select Download Folder"
+        eastPanel.add(showLogsButton); // Добавляем новую кнопку "Show Logs"
 
-        // Add components to the main panel
-        panel.add(urlField, BorderLayout.CENTER); // URL field in the center
-        panel.add(eastPanel, BorderLayout.EAST); // Buttons on the right
-        panel.add(infoLabel, BorderLayout.SOUTH); // Status label at the bottom
+        // Добавляем компоненты на основную панель
+        panel.add(urlField, BorderLayout.CENTER); // Поле URL в центре
+        panel.add(eastPanel, BorderLayout.EAST); // Кнопки справа
+        panel.add(infoLabel, BorderLayout.SOUTH); // Метка статуса внизу
 
-        // Add the panel to the frame
+        // Добавляем панель в окно
         add(panel);
 
-        // Add a window listener to focus the URL field when the window opens
+        // Добавляем слушатель окна, чтобы фокус сразу устанавливался на поле URL
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent evt) {
-                urlField.requestFocusInWindow(); // Set focus to URL field on startup
+                urlField.requestFocusInWindow(); // Устанавливаем фокус на поле URL при открытии
             }
         });
+
+        // Создаем окно логов, но изначально оставляем его скрытым
+        logFrame = new JFrame("Logs"); // Создаем новое окно с заголовком "Logs"
+        logTextArea = new JTextArea(20, 50); // Создаем текстовую область размером 20 строк и 50 символов
+        logTextArea.setEditable(false); // Делаем текстовую область только для чтения
+        logFrame.add(new JScrollPane(logTextArea)); // Добавляем текстовую область с прокруткой
+        logFrame.setSize(600, 400); // Устанавливаем размер окна логов
+        logFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE); // Скрываем окно при закрытии, а не завершаем приложение
+
+        // Перенаправляем вывод консоли в текстовую область и инициализируем начальное содержимое
+        redirectSystemStreams(); // Перенаправляем System.out и System.err
+        initializeLogContent(); // Заполняем начальные данные логов
     }
 
     /**
-     * Opens a file chooser dialog to let the user select a download folder.
+     * Перенаправляет вывод System.out и System.err в текстовую область logTextArea.
+     */
+    private void redirectSystemStreams() {
+        OutputStream out = new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                logTextArea.append(String.valueOf((char) b)); // Добавляем символ в текстовую область
+                logTextArea.setCaretPosition(logTextArea.getDocument().getLength()); // Прокручиваем вниз
+            }
+        };
+        System.setOut(new PrintStream(out, true)); // Перенаправляем стандартный вывод
+        System.setErr(new PrintStream(out, true)); // Перенаправляем вывод ошибок
+    }
+
+    /**
+     * Инициализирует содержимое окна логов начальными данными.
+     * Здесь можно добавить любую стартовую информацию, например, командную строку запуска.
+     */
+    private void initializeLogContent() {
+        String initialLog = "Программа запущена.\n" +
+                "Папка загрузки по умолчанию: " + DEFAULT_OUTPUT_PATH + "\n" +
+                "Введите URL видео для начала загрузки.\n";
+        logTextArea.append(initialLog); // Добавляем начальное сообщение в лог
+    }
+
+    /**
+     * Отображает окно логов при нажатии на кнопку "Show Logs".
+     */
+    private void showLogWindow() {
+        logFrame.setVisible(true); // Делаем окно логов видимым
+    }
+
+    /**
+     * Открывает диалог выбора папки для загрузки видео.
      */
     private void selectDownloadFolder() {
         JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY); // Restrict to directories only
-        int result = chooser.showOpenDialog(this); // Show the dialog
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY); // Ограничиваем выбор только папками
+        int result = chooser.showOpenDialog(this); // Показываем диалог
         if (result == JFileChooser.APPROVE_OPTION) {
-            selectedOutputPath = chooser.getSelectedFile().getAbsolutePath() + "/"; // Update path
-            infoLabel.setText("Выбрана папка загрузки: " + selectedOutputPath); // Update status
+            selectedOutputPath = chooser.getSelectedFile().getAbsolutePath() + "/"; // Обновляем путь
+            infoLabel.setText("Выбрана папка загрузки: " + selectedOutputPath); // Обновляем статус
+            logTextArea.append("Выбрана новая папка загрузки: " + selectedOutputPath + "\n"); // Логируем выбор
         }
     }
 
     /**
-     * Creates and attaches a popup menu to the URL field with Copy, Paste, and Cut options.
+     * Создает и прикрепляет контекстное меню к полю URL с опциями "Copy", "Paste" и "Cut".
      */
     private void createAndSetPopupMenu() {
-        JPopupMenu popupMenu = new JPopupMenu(); // Create the popup menu
-        JMenuItem copy = new JMenuItem(COPY); // Copy option
-        JMenuItem paste = new JMenuItem(PASTE); // Paste option
-        JMenuItem cut = new JMenuItem(CUT); // Cut option
+        JPopupMenu popupMenu = new JPopupMenu(); // Создаем контекстное меню
+        JMenuItem copy = new JMenuItem(COPY); // Опция "Copy"
+        JMenuItem paste = new JMenuItem(PASTE); // Опция "Paste"
+        JMenuItem cut = new JMenuItem(CUT); // Опция "Cut"
 
-        // Define actions for each menu item
+        // Определяем действия для каждого пункта меню
         copy.addActionListener(e -> urlField.copy());
         paste.addActionListener(e -> urlField.paste());
         cut.addActionListener(e -> urlField.cut());
 
-        // Add items to the popup menu
+        // Добавляем пункты в меню
         popupMenu.add(copy);
         popupMenu.add(paste);
         popupMenu.add(cut);
 
-        // Attach the popup menu to the URL field
+        // Прикрепляем меню к полю URL
         urlField.setComponentPopupMenu(popupMenu);
     }
 
     /**
-     * Initiates the video download process using yt-dlp or direct download if necessary.
+     * Запускает процесс загрузки видео с использованием yt-dlp или прямой загрузки при необходимости.
      */
     private void downloadVideo() {
-        Path outputPath = Paths.get(selectedOutputPath); // Get the output directory as a Path
+        Path outputPath = Paths.get(selectedOutputPath); // Получаем путь к папке как Path
         if (!Files.exists(outputPath)) {
             try {
-                Files.createDirectories(outputPath); // Create the directory if it doesn't exist
+                Files.createDirectories(outputPath); // Создаем папку, если её нет
+                logTextArea.append("Создана новая папка: " + outputPath + "\n"); // Логируем создание
             } catch (IOException e) {
-                infoLabel.setText(ERROR_CREATING_DIRECTORY + e.getMessage()); // Show error
+                infoLabel.setText(ERROR_CREATING_DIRECTORY + e.getMessage()); // Показываем ошибку
+                logTextArea.append("Ошибка создания папки: " + e.getMessage() + "\n"); // Логируем ошибку
                 return;
             }
         }
 
-        String url = urlField.getText().trim(); // Get and trim the entered URL
-        System.out.println(URL + url); // Log the URL for debugging
+        String url = urlField.getText().trim(); // Получаем и обрезаем введённый URL
+        System.out.println(URL + url); // Логируем URL для отладки (теперь в logTextArea)
 
-        // Check if the URL is empty
+        // Проверяем, пустой ли URL
         if (url.isEmpty()) {
             SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(VideoDownloaderFrame.this,
-                    PLEASE_ENTER_A_URL, ERROR2, JOptionPane.ERROR_MESSAGE)); // Show error dialog
+                    PLEASE_ENTER_A_URL, ERROR2, JOptionPane.ERROR_MESSAGE)); // Показываем ошибку
+            logTextArea.append("Ошибка: URL не введён.\n"); // Логируем ошибку
             return;
         }
 
-        // Validate the URL
+        // Проверяем валидность URL
         if (!isValidURL(url)) {
             SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(VideoDownloaderFrame.this,
-                    INVALID_URL_PLEASE_CHECK_AND_TRY_AGAIN, ERROR3, JOptionPane.ERROR_MESSAGE)); // Show error
+                    INVALID_URL_PLEASE_CHECK_AND_TRY_AGAIN, ERROR3, JOptionPane.ERROR_MESSAGE)); // Показываем ошибку
+            logTextArea.append("Ошибка: Неверный URL - " + url + "\n"); // Логируем ошибку
             return;
         }
 
-        // Try downloading with yt-dlp first
+        // Пробуем загрузить с помощью yt-dlp
         boolean success = tryYtDlp(url, outputPath);
         if (!success) {
-            String extractedUrl = extractVideoUrl(url); // Extract video URL if yt-dlp fails
+            String extractedUrl = extractVideoUrl(url); // Извлекаем URL видео, если yt-dlp не сработал
             if (extractedUrl != null) {
-                success = tryYtDlp(extractedUrl, outputPath); // Retry with extracted URL
+                logTextArea.append("Извлечён прямой URL: " + extractedUrl + "\n"); // Логируем извлечённый URL
+                success = tryYtDlp(extractedUrl, outputPath); // Повторяем попытку с извлечённым URL
                 if (!success) {
-                    downloadDirectly(extractedUrl, outputPath); // Fall back to direct download
+                    downloadDirectly(extractedUrl, outputPath); // Переходим к прямой загрузке
                 }
             } else {
-                infoLabel.setText("Видео не найдено на странице"); // Video not found message
+                infoLabel.setText("Видео не найдено на странице"); // Сообщение об ошибке
+                logTextArea.append("Видео не найдено на странице: " + url + "\n"); // Логируем ошибку
             }
         } else {
-            infoLabel.setText(DOWNLOAD_COMPLETE); // Success message
-            System.exit(0); // Exit the program after successful download
+            infoLabel.setText(DOWNLOAD_COMPLETE); // Сообщение об успехе
+            logTextArea.append("Загрузка завершена успешно.\n"); // Логируем успех
+            System.exit(0); // Завершаем программу после успешной загрузки
         }
     }
 
     /**
-     * Attempts to download a video using the yt-dlp command-line tool.
-     * @param videoUrl The URL of the video to download.
-     * @param outputPath The directory where the video will be saved.
-     * @return True if the download succeeds, false otherwise.
+     * Пытается загрузить видео с помощью инструмента yt-dlp.
+     * @param videoUrl URL видео для загрузки.
+     * @param outputPath Папка, куда будет сохранено видео.
+     * @return True, если загрузка успешна, иначе False.
      */
     private boolean tryYtDlp(String videoUrl, Path outputPath) {
         ProcessBuilder processBuilder = getProcessBuilder(videoUrl, outputPath);
 
         try {
-            Process process = processBuilder.start(); // Start the process
-            StringBuilder output = new StringBuilder(); // Store process output
+            Process process = processBuilder.start(); // Запускаем процесс
+            StringBuilder output = new StringBuilder(); // Храним вывод процесса
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n"); // Read output line by line
+                    output.append(line).append("\n"); // Читаем вывод построчно
+                    logTextArea.append("yt-dlp: " + line + "\n"); // Логируем каждую строку вывода
                 }
             }
-            int exitCode = process.waitFor(); // Wait for the process to complete
+            int exitCode = process.waitFor(); // Ждём завершения процесса
             if (exitCode == 0) {
-                return true; // Success
+                logTextArea.append("yt-dlp завершил загрузку с кодом 0.\n"); // Логируем успех
+                return true; // Успех
             } else {
-                infoLabel.setText("yt-dlp завершился с ошибкой " + exitCode + ": " + output); // Show error
+                infoLabel.setText("yt-dlp завершился с ошибкой " + exitCode + ": " + output); // Показываем ошибку
+                logTextArea.append("yt-dlp завершился с ошибкой " + exitCode + ": " + output + "\n"); // Логируем ошибку
                 return false;
             }
         } catch (IOException ex) {
-            // Handle specific yt-dlp not found errors
+            // Обрабатываем ошибки, связанные с отсутствием yt-dlp
             if (ex.getMessage().contains("No such file or directory") || ex.getMessage().contains("cannot find the file")) {
                 infoLabel.setText("yt-dlp не найден. Пожалуйста, установите yt-dlp.");
+                logTextArea.append("Ошибка: yt-dlp не найден.\n"); // Логируем ошибку
             } else {
                 infoLabel.setText("Ошибка запуска yt-dlp: " + ex.getMessage());
+                logTextArea.append("Ошибка запуска yt-dlp: " + ex.getMessage() + "\n"); // Логируем ошибку
             }
             return false;
         } catch (InterruptedException ex) {
-            infoLabel.setText(INTERRUPTED + ex.getMessage()); // Handle interruption
+            infoLabel.setText(INTERRUPTED + ex.getMessage()); // Обрабатываем прерывание
+            logTextArea.append("Прерывание yt-dlp: " + ex.getMessage() + "\n"); // Логируем прерывание
             return false;
         }
     }
 
+    /**
+     * Создаёт ProcessBuilder для выполнения команды yt-dlp.
+     * @param videoUrl URL видео.
+     * @param outputPath Путь для сохранения.
+     * @return Настроенный ProcessBuilder.
+     */
     private static @NotNull ProcessBuilder getProcessBuilder(String videoUrl, Path outputPath) {
-        List<String> command = new ArrayList<>(); // Build the yt-dlp command
-        command.add(YT_DLP); // Command executable
-        command.add("--user-agent"); // Set a user-agent to mimic a browser
+        List<String> command = new ArrayList<>(); // Создаём команду для yt-dlp
+        command.add(YT_DLP); // Исполняемый файл
+        command.add("--user-agent"); // Устанавливаем user-agent для имитации браузера
         command.add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        command.add(videoUrl); // Add the video URL
-        command.add(O); // Output option
-        command.add(outputPath.toString() + "/" + TITLE_S_EXT_S); // Output path and filename template
+        command.add(videoUrl); // Добавляем URL видео
+        command.add(O); // Опция вывода
+        command.add(outputPath.toString() + "/" + TITLE_S_EXT_S); // Путь и шаблон имени файла
 
-        ProcessBuilder processBuilder = new ProcessBuilder(command); // Create process builder
-        processBuilder.redirectErrorStream(true); // Merge error and output streams
+        ProcessBuilder processBuilder = new ProcessBuilder(command); // Создаём процесс
+        processBuilder.redirectErrorStream(true); // Объединяем потоки ошибок и вывода
         return processBuilder;
     }
 
     /**
-     * Converts a relative URL to an absolute URL using the base URL.
-     * @param baseUrl The base URL for resolution.
-     * @param relativeUrl The relative URL to convert.
-     * @return The absolute URL as a string.
+     * Преобразует относительный URL в абсолютный, используя базовый URL.
+     * @param baseUrl Базовый URL для разрешения.
+     * @param relativeUrl Относительный URL для преобразования.
+     * @return Абсолютный URL как строка.
      */
     private String makeAbsoluteUrl(String baseUrl, String relativeUrl) {
         try {
             URI baseUri = new URI(baseUrl);
             URI absoluteUri = baseUri.resolve(relativeUrl);
+            logTextArea.append("Преобразован URL: " + relativeUrl + " -> " + absoluteUri.toString() + "\n"); // Логируем
             return absoluteUri.toString();
         } catch (URISyntaxException e) {
             infoLabel.setText("Ошибка при преобразовании URL: " + e.getMessage());
+            logTextArea.append("Ошибка преобразования URL: " + e.getMessage() + "\n"); // Логируем ошибку
             return relativeUrl;
         }
     }
 
+    /**
+     * Извлекает URL видео из страницы.
+     * @param pageUrl URL страницы.
+     * @return Извлечённый URL видео или null.
+     */
     private String extractVideoUrl(String pageUrl) {
         return VideoExtractor.extractVideoUrl(pageUrl);
     }
 
     /**
-     * Recursively searches for a video URL in the document, including iframes.
-     * @param baseUrl The base URL for resolving relative URLs.
-     * @param doc The HTML document to search.
-     * @param depth The current recursion depth (max 2 to prevent infinite loops).
-     * @return The video URL if found, or null otherwise.
+     * Рекурсивно ищет URL видео в документе, включая iframes.
+     * @param baseUrl Базовый URL для разрешения относительных ссылок.
+     * @param doc HTML-документ для поиска.
+     * @param depth Текущая глубина рекурсии (максимум 2 для предотвращения бесконечных циклов).
+     * @return URL видео, если найден, иначе null.
      */
     private String extractVideoUrlRecursive(String baseUrl, Document doc, int depth) {
-        if (depth > 2) { // Limit recursion depth to avoid infinite loops
+        if (depth > 2) { // Ограничиваем глубину рекурсии
+            logTextArea.append("Достигнута максимальная глубина рекурсии: " + depth + "\n"); // Логируем
             return null;
         }
 
-        // Search for <video> tags
+        // Ищем теги <video>
         Elements videos = doc.select("video");
         for (Element video : videos) {
-            String src = video.attr("src"); // Check the src attribute
+            String src = video.attr("src"); // Проверяем атрибут src
             if (src != null && !src.isEmpty()) {
-                return makeAbsoluteUrl(baseUrl, src); // Return absolute URL
+                logTextArea.append("Найден URL в теге <video>: " + src + "\n"); // Логируем
+                return makeAbsoluteUrl(baseUrl, src); // Возвращаем абсолютный URL
             }
-            Elements sources = video.select("source"); // Check <source> tags inside <video>
+            Elements sources = video.select("source"); // Проверяем теги <source> внутри <video>
             for (Element source : sources) {
                 src = source.attr("src");
                 if (src != null && !src.isEmpty()) {
+                    logTextArea.append("Найден URL в теге <source>: " + src + "\n"); // Логируем
                     return makeAbsoluteUrl(baseUrl, src);
                 }
             }
         }
 
-        // Search for iframes and recursively process them
+        // Ищем iframes и рекурсивно обрабатываем их
         Elements iframes = doc.select("iframe");
         for (Element iframe : iframes) {
             String iframeSrc = iframe.attr("src");
             if (iframeSrc != null && !iframeSrc.isEmpty()) {
-                String iframeUrl = makeAbsoluteUrl(baseUrl, iframeSrc); // Resolve iframe URL
+                String iframeUrl = makeAbsoluteUrl(baseUrl, iframeSrc); // Разрешаем URL iframe
+                logTextArea.append("Обработка iframe: " + iframeUrl + "\n"); // Логируем
                 try {
                     Document iframeDoc = Jsoup.connect(iframeUrl)
                             .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
                             .get();
-                    String result = extractVideoUrlRecursive(iframeUrl, iframeDoc, depth + 1); // Recurse
+                    String result = extractVideoUrlRecursive(iframeUrl, iframeDoc, depth + 1); // Рекурсия
                     if (result != null) {
                         return result;
                     }
                 } catch (IOException e) {
-                    System.out.println("Ошибка загрузки iframe: " + iframeUrl + " - " + e.getMessage()); // Log error
-                    // Continue to next iframe
+                    System.out.println("Ошибка загрузки iframe: " + iframeUrl + " - " + e.getMessage()); // Логируем ошибку
+                    // Продолжаем с следующим iframe
                 }
             }
         }
 
-        // Search for meta tags with video URLs (e.g., og:video)
+        // Ищем мета-теги с URL видео (например, og:video)
         Elements metaVideos = doc.select("meta[property=og:video]");
         for (Element meta : metaVideos) {
             String content = meta.attr("content");
             if (content != null && !content.isEmpty()) {
+                logTextArea.append("Найден URL в meta og:video: " + content + "\n"); // Логируем
                 return makeAbsoluteUrl(baseUrl, content);
             }
         }
 
-        return null; // No video URL found
+        logTextArea.append("URL видео не найден на глубине " + depth + "\n"); // Логируем отсутствие результата
+        return null; // URL видео не найден
     }
 
     /**
-     * Downloads a video directly from a URL using HTTP requests.
-     * @param videoUrl The URL of the video to download.
-     * @param outputPath The directory where the video will be saved.
+     * Загружает видео напрямую с помощью HTTP-запросов и Selenium.
+     * @param videoUrl URL видео для загрузки.
+     * @param outputPath Папка для сохранения видео.
      */
     private void downloadDirectly(String videoUrl, Path outputPath) {
         try {
@@ -377,31 +464,32 @@ public class VideoDownloaderFrame extends JFrame {
 
             // Открываем URL видео в новом окне
             driver.get(videoUrl);
+            logTextArea.append("Открыт браузер с URL: " + videoUrl + "\n"); // Логируем открытие
 
             // Разворачиваем окно на весь экран (опционально)
             driver.manage().window().maximize();
 
-            // Браузер остаётся открытым, чтобы ты мог скачать видео вручную
-
+            // Браузер остаётся открытым для ручной загрузки пользователем
         } catch (Exception e) {
             infoLabel.setText("Ошибка при открытии URL: " + e.getMessage());
+            logTextArea.append("Ошибка открытия URL в браузере: " + e.getMessage() + "\n"); // Логируем ошибку
         }
     }
 
     /**
-     * Validates whether a given string is a valid HTTP or HTTPS URL.
-     * @param url The URL to validate.
-     * @return True if the URL is valid, false otherwise.
+     * Проверяет, является ли строка валидным URL с протоколом HTTP или HTTPS.
+     * @param url URL для проверки.
+     * @return True, если URL валиден, иначе False.
      */
     public static boolean isValidURL(String url) {
-        if (url == null) return false; // Null URLs are invalid
+        if (url == null) return false; // Нулевые URL недопустимы
         try {
-            URI uri = new URI(url); // Parse the URL
-            uri.parseServerAuthority(); // Check server authority
-            String scheme = uri.getScheme(); // Get the protocol (http/https)
-            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme); // Validate scheme
+            URI uri = new URI(url); // Парсим URL
+            uri.parseServerAuthority(); // Проверяем авторитет сервера
+            String scheme = uri.getScheme(); // Получаем протокол (http/https)
+            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme); // Проверяем схему
         } catch (URISyntaxException e) {
-            return false; // Invalid URL syntax
+            return false; // Неверный синтаксис URL
         }
     }
 }
