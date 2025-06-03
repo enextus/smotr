@@ -5,6 +5,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 
 import javax.swing.*;
 import java.awt.*;
@@ -363,28 +365,26 @@ public class VideoDownloaderFrame extends JFrame {
      */
     private void downloadDirectly(String videoUrl, Path outputPath) {
         try {
-            // Extract the file name from the video URL
-            String fileName = Paths.get(new URI(videoUrl).getPath()).getFileName().toString();
-            if (fileName.contains("?")) {
-                fileName = fileName.substring(0, fileName.indexOf("?")); // Remove query parameters
-            }
-            Path outputFile = outputPath.resolve(fileName); // Construct output file path
+            // Указываем путь к ChromeDriver
+            System.setProperty("webdriver.chrome.driver", "C:/opt/chromedriver/chromedriver.exe");
 
-            // Download the video using HttpURLConnection
-            URL url = new URL(videoUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
+            // Настраиваем опции для Chrome
+            ChromeOptions options = new ChromeOptions();
+            // Браузер будет виден (не в headless-режиме)
 
-            try (InputStream in = connection.getInputStream()) {
-                Files.copy(in, outputFile); // Copy video to file
-            }
+            // Создаём экземпляр ChromeDriver
+            ChromeDriver driver = new ChromeDriver(options);
 
-            connection.disconnect();
+            // Открываем URL видео в новом окне
+            driver.get(videoUrl);
 
-            infoLabel.setText("Скачивание завершено: " + fileName); // Show success message
-            System.exit(0); // Exit the program after successful download
+            // Разворачиваем окно на весь экран (опционально)
+            driver.manage().window().maximize();
+
+            // Браузер остаётся открытым, чтобы ты мог скачать видео вручную
+
         } catch (Exception e) {
-            infoLabel.setText("Ошибка при скачивании: " + e.getMessage()); // Show error
+            infoLabel.setText("Ошибка при открытии URL: " + e.getMessage());
         }
     }
 
