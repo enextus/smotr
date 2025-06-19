@@ -147,10 +147,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version> <!-- Add the version here -->
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
+                    <source>1.8</source> <!-- Java source version -->
+                    <target>1.8</target> <!-- Java target version -->
                 </configuration>
             </plugin>
         </plugins>

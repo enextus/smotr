@@ -50,8 +50,8 @@ public class VideoDownloaderFrame extends JFrame {
     public static final String DOWNLOAD = "Download"; // Загрузить
     public static final String SELECT_DOWNLOAD_FOLDER = "Select Download Folder"; // Выбрать папку загрузки
     public static final String SHOW_LOGS = "Show Logs"; // Показать логи (новая константа)
-    public static final int WIDTH1 = 700; // Ширина окна в пикселях
-    public static final int HEIGHT1 =150; // Высота окна в пикселях
+    public static final int WIDTH1 = 800; // Ширина окна в пикселях
+    public static final int HEIGHT1 = 200; // Высота окна в пикселях
     public static final String VIDEO_DOWNLOADER = "Video Downloader"; // Заголовок окна
 
     // Компоненты графического интерфейса
@@ -153,23 +153,8 @@ public class VideoDownloaderFrame extends JFrame {
         logFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE); // Скрываем окно при закрытии, а не завершаем приложение
 
         // Перенаправляем вывод консоли в текстовую область и инициализируем начальное содержимое
-        redirectSystemStreams(); // Перенаправляем System.out и System.err
-        initializeLogContent(); // Заполняем начальные данные логов
-    }
 
-    /**
-     * Перенаправляет вывод System.out и System.err в текстовую область logTextArea.
-     */
-    private void redirectSystemStreams() {
-        OutputStream out = new OutputStream() {
-            @Override
-            public void write(int b) throws IOException {
-                logTextArea.append(String.valueOf((char) b)); // Добавляем символ в текстовую область
-                logTextArea.setCaretPosition(logTextArea.getDocument().getLength()); // Прокручиваем вниз
-            }
-        };
-        System.setOut(new PrintStream(out, true)); // Перенаправляем стандартный вывод
-        System.setErr(new PrintStream(out, true)); // Перенаправляем вывод ошибок
+        initializeLogContent(); // Заполняем начальные данные логов
     }
 
     /**
@@ -285,7 +270,8 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Пытается загрузить видео с помощью инструмента yt-dlp.
-     * @param videoUrl URL видео для загрузки.
+     *
+     * @param videoUrl   URL видео для загрузки.
      * @param outputPath Папка, куда будет сохранено видео.
      * @return True, если загрузка успешна, иначе False.
      */
@@ -330,7 +316,8 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Создаёт ProcessBuilder для выполнения команды yt-dlp.
-     * @param videoUrl URL видео.
+     *
+     * @param videoUrl   URL видео.
      * @param outputPath Путь для сохранения.
      * @return Настроенный ProcessBuilder.
      */
@@ -350,7 +337,8 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Преобразует относительный URL в абсолютный, используя базовый URL.
-     * @param baseUrl Базовый URL для разрешения.
+     *
+     * @param baseUrl     Базовый URL для разрешения.
      * @param relativeUrl Относительный URL для преобразования.
      * @return Абсолютный URL как строка.
      */
@@ -369,6 +357,7 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Извлекает URL видео из страницы.
+     *
      * @param pageUrl URL страницы.
      * @return Извлечённый URL видео или null.
      */
@@ -378,9 +367,10 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Рекурсивно ищет URL видео в документе, включая iframes.
+     *
      * @param baseUrl Базовый URL для разрешения относительных ссылок.
-     * @param doc HTML-документ для поиска.
-     * @param depth Текущая глубина рекурсии (максимум 2 для предотвращения бесконечных циклов).
+     * @param doc     HTML-документ для поиска.
+     * @param depth   Текущая глубина рекурсии (максимум 2 для предотвращения бесконечных циклов).
      * @return URL видео, если найден, иначе null.
      */
     private String extractVideoUrlRecursive(String baseUrl, Document doc, int depth) {
@@ -445,7 +435,8 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Загружает видео напрямую с помощью HTTP-запросов и Selenium.
-     * @param videoUrl URL видео для загрузки.
+     *
+     * @param videoUrl   URL видео для загрузки.
      * @param outputPath Папка для сохранения видео.
      */
     private void downloadDirectly(String videoUrl, Path outputPath) {
@@ -476,6 +467,7 @@ public class VideoDownloaderFrame extends JFrame {
 
     /**
      * Проверяет, является ли строка валидным URL с протоколом HTTP или HTTPS.
+     *
      * @param url URL для проверки.
      * @return True, если URL валиден, иначе False.
      */
@@ -490,4 +482,5 @@ public class VideoDownloaderFrame extends JFrame {
             return false; // Неверный синтаксис URL
         }
     }
+
 }
