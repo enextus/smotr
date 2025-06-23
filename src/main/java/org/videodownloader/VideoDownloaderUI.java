@@ -2,184 +2,142 @@ package org.videodownloader;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.io.File;
-import java.io.IOException;
+import java.util.Arrays;
 
-/**
- * Класс для создания и управления графическим интерфейсом приложения.
- * Предоставляет поле для ввода URL, кнопки управления и отображение статуса загрузки.
- * Поддерживает динамическую установку слушателя для обновления статуса.
- */
 public class VideoDownloaderUI extends JFrame {
-    private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
-    private static final int WIDTH = 700;
-    private static final int HEIGHT = 150;
-    private JTextField urlField;
-    private JLabel statusLabel;
-    private JButton downloadButton;
-    private JButton clearButton;
-    private JButton openFolderButton;
-    private JButton selectFolderButton;
-    private JButton showLogsButton;
-    private final VideoDownloadManager downloadManager;
-    private final LogManager logManager;
-    private App.DownloadListener listener;
 
-    /**
-     * Конструктор класса VideoDownloaderUI.
-     *
-     * @param downloadManager менеджер загрузок
-     * @param logManager      менеджер логов
-     * @param listener        слушатель для обновления статуса (может быть null)
-     */
-    public VideoDownloaderUI(VideoDownloadManager downloadManager, LogManager logManager, App.DownloadListener listener) {
-        this.downloadManager = downloadManager;
+    /* ───── UI-константы ───── */
+    private static final int WIDTH = 560, HEIGHT = 170;
+
+    private static final String LBL_DEFAULT = "Select amount & press Get QRNG";
+    private static final String BTN_CLEAR   = "Clear";
+    private static final String BTN_SHOW    = "Show Logs";
+    private static final String BTN_QRNG    = "Get QRNG";
+
+    /* ───── компоненты ───── */
+    private final JComboBox<Integer> hundreds = new JComboBox<>();
+    private final JComboBox<Integer> tens     = new JComboBox<>();
+    private final JComboBox<Integer> units    = new JComboBox<>();
+
+    private final JTextField urlField = new JTextField(30);
+    private final JLabel statusLbl    = new JLabel(LBL_DEFAULT);
+
+    private final JButton clearBtn = new JButton(BTN_CLEAR);
+    private final JButton logsBtn  = new JButton(BTN_SHOW);
+    private final JButton qrngBtn  = new JButton(BTN_QRNG);
+
+    private final LogManager logManager;
+
+    public VideoDownloaderUI(LogManager logManager) {
         this.logManager = logManager;
-        this.listener = listener;
-        initializeUI();
+        initUI();
     }
 
-    /**
-     * Инициализирует компоненты графического интерфейса.
-     * Настраивает окно, панели, кнопки, контекстное меню и обработчики событий.
-     */
-    private void initializeUI() {
-        // Настройка основного окна
-        setTitle("Video Downloader");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    /* ────────── построение интерфейса ────────── */
+
+    private void initUI() {
+        setTitle("QRNG Demo");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(WIDTH, HEIGHT);
-        setLayout(new BorderLayout());
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout(5, 5));
 
-        // Панель ввода URL и статуса
-        JPanel inputPanel = new JPanel(new BorderLayout());
-        urlField = new JTextField(30);
-        createAndSetPopupMenu();
-        statusLabel = new JLabel("Enter the video URL");
-        inputPanel.add(urlField, BorderLayout.CENTER);
-        inputPanel.add(statusLabel, BorderLayout.SOUTH);
+        /* ---------- A. селекторы ---------- */
+        for (int i = 0; i <= 9; i++) {
+            hundreds.addItem(i);
+            tens.addItem(i);
+            units.addItem(i);
+        }
+        tens.setSelectedItem(1);
+        units.setSelectedItem(6);
 
-        // Панель кнопок (5 кнопок в вертикальной сетке)
-        JPanel buttonPanel = new JPanel(new GridLayout(5, 1, 5, 5));
-        downloadButton = new JButton("Download");
-        clearButton = new JButton("Clear");
-        openFolderButton = new JButton("Open Folder");
-        selectFolderButton = new JButton("Select Download Folder");
-        showLogsButton = new JButton("Show Logs");
+        JPanel selector = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        selector.add(hundreds);   selector.add(new JLabel("×100"));
+        selector.add(tens);       selector.add(new JLabel("×10"));
+        selector.add(units);      selector.add(new JLabel("×1"));
 
-        buttonPanel.add(downloadButton);
-        buttonPanel.add(clearButton);
-        buttonPanel.add(openFolderButton);
-        buttonPanel.add(selectFolderButton);
-        buttonPanel.add(showLogsButton);
+        /* ---------- B. центральная область ---------- */
+        JPanel center = new JPanel(new BorderLayout(5, 5));
+        attachPopup(urlField);
 
-        // Добавление компонентов в окно
-        add(inputPanel, BorderLayout.CENTER);
-        add(buttonPanel, BorderLayout.EAST);
+        center.add(selector, BorderLayout.NORTH);   // селекторы сверху
+        center.add(urlField,  BorderLayout.CENTER); // поле результата
+        center.add(statusLbl, BorderLayout.SOUTH);  // статус
 
-        // Обработчики событий
-        downloadButton.addActionListener(e -> {
-            String url = urlField.getText().trim();
-            if (url.isEmpty()) {
-                setStatus("Please enter a URL");
-                logManager.appendLog("Error: URL is empty");
-                return;
-            }
-            downloadManager.downloadVideo(url, listener);
-            setStatus("Starting download...");
-        });
+        add(center, BorderLayout.CENTER);
 
-        clearButton.addActionListener(e -> {
+        /* ---------- C. панель кнопок ---------- */
+        JPanel east = new JPanel(new GridLayout(3, 1, 5, 5));
+        east.add(qrngBtn);   // Get QRNG (первой)
+        east.add(logsBtn);   // Show Logs
+        east.add(clearBtn);  // Clear
+        add(east, BorderLayout.EAST);
+
+        /* ---------- обработчики ---------- */
+        clearBtn.addActionListener(e -> {
             urlField.setText("");
-            setStatus("Enter the video URL");
+            setStatus(LBL_DEFAULT);
             logManager.appendLog("URL field cleared");
         });
 
-        openFolderButton.addActionListener(e -> {
-            try {
-                Desktop.getDesktop().open(new File(downloadManager.getSelectedOutputPath()));
-                setStatus("Folder opened: " + downloadManager.getSelectedOutputPath());
-                logManager.appendLog("Folder opened: " + downloadManager.getSelectedOutputPath());
-            } catch (IOException ex) {
-                setStatus("Error opening folder: " + ex.getMessage());
-                logManager.appendLog("Error opening folder: " + ex.getMessage());
-            }
-        });
-
-        selectFolderButton.addActionListener(e -> selectDownloadFolder());
-
-        showLogsButton.addActionListener(e -> {
+        logsBtn.addActionListener(e -> {
             logManager.showLogWindow();
             logManager.appendLog("Log window opened");
         });
 
-        // Установка фокуса на поле URL при открытии окна
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowOpened(WindowEvent evt) {
-                urlField.requestFocusInWindow();
-            }
-        });
-
-        // Центрирование окна
-        setLocationRelativeTo(null);
+        qrngBtn.addActionListener(e -> runQRNG());
     }
 
-    /**
-     * Создаёт и прикрепляет контекстное меню к полю URL.
-     * Поддерживает операции Copy, Paste, Cut.
-     */
-    private void createAndSetPopupMenu() {
-        JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem copy = new JMenuItem("Copy");
-        JMenuItem paste = new JMenuItem("Paste");
-        JMenuItem cut = new JMenuItem("Cut");
-
-        copy.addActionListener(e -> urlField.copy());
-        paste.addActionListener(e -> urlField.paste());
-        cut.addActionListener(e -> urlField.cut());
-
-        popupMenu.add(copy);
-        popupMenu.add(paste);
-        popupMenu.add(cut);
-
-        urlField.setComponentPopupMenu(popupMenu);
-    }
-
-    /**
-     * Открывает диалог выбора папки для загрузки.
-     * Обновляет путь в downloadManager и отображает статус.
-     */
-    private void selectDownloadFolder() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        int result = chooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            String newPath = chooser.getSelectedFile().getAbsolutePath() + "/";
-            downloadManager.setSelectedOutputPath(newPath);
-            setStatus("Selected folder: " + newPath);
-            logManager.appendLog("Selected download folder: " + newPath);
+    /* ────────── QRNG-логика ────────── */
+    private void runQRNG() {
+        int count = getSelectedCount();
+        if (count == 0) {
+            setStatus("Count must be > 0");
+            return;
         }
+
+        qrngBtn.setEnabled(false);
+        setStatus("Requesting " + count + " random bytes…");
+        logManager.appendLog("QRNG request started (" + count + " bytes)");
+
+        new Thread(() -> {
+            try {
+                int[] bytes = RandomFetcher.fetchBytes(count);
+                String text = Arrays.toString(bytes);
+
+                SwingUtilities.invokeLater(() -> {
+                    urlField.setText(text);
+                    setStatus("QRNG success (" + count + " bytes)");
+                    logManager.appendLog("QRNG success: " + text);
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    setStatus("QRNG error: " + ex.getMessage());
+                    logManager.appendLog("QRNG error: " + ex);
+                });
+            } finally {
+                SwingUtilities.invokeLater(() -> qrngBtn.setEnabled(true));
+            }
+        }, "QRNG-thread").start();
     }
 
-    /**
-     * Обновляет текст статуса в интерфейсе и уведомляет слушателя.
-     *
-     * @param status новое сообщение статуса
-     */
-    public void setStatus(String status) {
-        statusLabel.setText(status);
+    /* ────────── helpers ────────── */
+    private int getSelectedCount() {
+        int h = (Integer) hundreds.getSelectedItem();
+        int t = (Integer) tens.getSelectedItem();
+        int u = (Integer) units.getSelectedItem();
+        return h * 100 + t * 10 + u;
     }
 
-    /**
-     * Устанавливает слушатель для обновления статуса.
-     * Используется для динамической привязки слушателя после создания UI.
-     *
-     * @param listener новый слушатель
-     */
-    public void setDownloadListener(App.DownloadListener listener) {
-        this.listener = listener;
+    private static void attachPopup(JTextField field) {
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copy = new JMenuItem("Copy"), paste = new JMenuItem("Paste"), cut = new JMenuItem("Cut");
+        copy.addActionListener(e -> field.copy());
+        paste.addActionListener(e -> field.paste());
+        cut.addActionListener(e -> field.cut());
+        menu.add(copy); menu.add(paste); menu.add(cut);
+        field.setComponentPopupMenu(menu);
     }
 
+    private void setStatus(String msg) { statusLbl.setText(msg); }
 }
