@@ -1,4 +1,4 @@
-package org.videodownloader;
+package org.randomfetcher;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

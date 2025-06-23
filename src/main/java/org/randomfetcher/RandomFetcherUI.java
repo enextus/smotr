@@ -1,10 +1,10 @@
-package org.videodownloader;
+package org.randomfetcher;
 
 import javax.swing.*;
 import java.awt.*;
 import java.util.Arrays;
 
-public class VideoDownloaderUI extends JFrame {
+public class package RandomFetcherUI extends JFrame {
 
     /* UI-константы */
     private static final int WIDTH = 580, HEIGHT = 190;
@@ -27,7 +27,7 @@ public class VideoDownloaderUI extends JFrame {
 
     private final LogManager logManager;
 
-    public VideoDownloaderUI(LogManager logManager) {
+    public RandomFetcherUI(LogManager logManager) {
         this.logManager = logManager;
         initUI();
     }
@@ -147,4 +147,7 @@ public class VideoDownloaderUI extends JFrame {
     }
 
     private void setStatus(String s) { statusLbl.setText(s); }
+}
+
+void main() {
 }

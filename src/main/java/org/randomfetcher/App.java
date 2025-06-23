@@ -1,4 +1,4 @@
-package org.videodownloader;
+package org.randomfetcher;
 
 import javax.swing.SwingUtilities;
 
@@ -14,11 +14,12 @@ public class App {
             LogManager logManager = new LogManager();
 
             // GUI с тремя кнопками
-            VideoDownloaderUI ui = new VideoDownloaderUI(logManager);
+            RandomFetcherUI ui = new RandomFetcherUI(logManager);
             ui.setVisible(true);
 
             // Первая запись в лог
             logManager.appendLog("Application started (QRNG-only GUI)");
         });
     }
+
 }

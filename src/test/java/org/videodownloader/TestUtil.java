@@ -1,16 +1,22 @@
 package org.videodownloader;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
 import java.util.List;
 
+/** Утилита для тестов: безопасно подменяет private static final List<T> */
 final class TestUtil {
-    /** Подменяет неизменяемое static List в целевом классе. */
-    @SuppressWarnings("unchecked")
-    static void replacePrivateStaticList(Class<?> target, String field, List<?> newValue) {
-        try {
-            Field f = target.getDeclaredField(field);
-            f.setAccessible(true);
-            f.set(null, newValue);
-        } catch (Exception e) { throw new RuntimeException(e); }
+    private TestUtil() {}
+
+    static <T> void replacePrivateStaticList(
+            Class<?> target, String fieldName, List<T> newValue) throws Exception {
+
+        Field f = target.getDeclaredField(fieldName);
+        f.setAccessible(true);                 // получаем VarHandle
+        VarHandle vh = MethodHandles.privateLookupIn(target, MethodHandles.lookup())
+                .unreflectVarHandle(f);
+
+        vh.setVolatile(null, newValue);        // null → для static-поля
     }
 }
