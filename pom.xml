@@ -33,7 +33,22 @@
 
     <!-- ——— зависимости ——— -->
     <dependencies>
-
+        <!-- AssertJ + Swing helpers (тесты UI) -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-swing-junit</artifactId>
+            <version>3.21.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- WireMock 3.x, JRE 8 — ЛИШЬ ДЛЯ ТЕСТОВ -->
+        <!-- test-scope only -->
+        <!-- WireMock (thin) -->
+        <dependency>
+            <groupId>com.github.tomakehurst</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>3.6.0</version>          <!-- или 3.5.4 — любая из 3.x -->
+            <scope>test</scope>
+        </dependency>
         <!-- (1) *Твои* библиотеки  — оставляем как есть -->
         <dependency>
             <groupId>org.seleniumhq.selenium</groupId>

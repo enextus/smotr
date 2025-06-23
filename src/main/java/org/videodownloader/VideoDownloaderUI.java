@@ -6,25 +6,24 @@ import java.util.Arrays;
 
 public class VideoDownloaderUI extends JFrame {
 
-    /* ───── UI-константы ───── */
-    private static final int WIDTH = 560, HEIGHT = 170;
-
+    /* UI-константы */
+    private static final int WIDTH = 580, HEIGHT = 190;
     private static final String LBL_DEFAULT = "Select amount & press Get QRNG";
-    private static final String BTN_CLEAR   = "Clear";
-    private static final String BTN_SHOW    = "Show Logs";
-    private static final String BTN_QRNG    = "Get QRNG";
 
-    /* ───── компоненты ───── */
+    /* выпадающие списки */
     private final JComboBox<Integer> hundreds = new JComboBox<>();
     private final JComboBox<Integer> tens     = new JComboBox<>();
     private final JComboBox<Integer> units    = new JComboBox<>();
 
+    /* «табло» выбранного количества */
+    private final JLabel countLbl = new JLabel("016", SwingConstants.CENTER);
+
     private final JTextField urlField = new JTextField(30);
     private final JLabel statusLbl    = new JLabel(LBL_DEFAULT);
 
-    private final JButton clearBtn = new JButton(BTN_CLEAR);
-    private final JButton logsBtn  = new JButton(BTN_SHOW);
-    private final JButton qrngBtn  = new JButton(BTN_QRNG);
+    private final JButton clearBtn = new JButton("Clear");
+    private final JButton logsBtn  = new JButton("Show Logs");
+    private final JButton qrngBtn  = new JButton("Get QRNG");
 
     private final LogManager logManager;
 
@@ -33,8 +32,7 @@ public class VideoDownloaderUI extends JFrame {
         initUI();
     }
 
-    /* ────────── построение интерфейса ────────── */
-
+    /* ---------- интерфейс ---------- */
     private void initUI() {
         setTitle("QRNG Demo");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -42,7 +40,7 @@ public class VideoDownloaderUI extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(5, 5));
 
-        /* ---------- A. селекторы ---------- */
+        /* заполняем списки 0-9 */
         for (int i = 0; i <= 9; i++) {
             hundreds.addItem(i);
             tens.addItem(i);
@@ -51,29 +49,44 @@ public class VideoDownloaderUI extends JFrame {
         tens.setSelectedItem(1);
         units.setSelectedItem(6);
 
-        JPanel selector = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        selector.add(hundreds);   selector.add(new JLabel("×100"));
-        selector.add(tens);       selector.add(new JLabel("×10"));
-        selector.add(units);      selector.add(new JLabel("×1"));
+        /* слушатель для обновления табло */
+        var updateCount = (Runnable) () -> countLbl.setText(String.format("%03d", getSelectedCount()));
+        hundreds.addActionListener(e -> updateCount.run());
+        tens.addActionListener(e      -> updateCount.run());
+        units.addActionListener(e     -> updateCount.run());
 
-        /* ---------- B. центральная область ---------- */
+        /* ---------- панель выбора количества ---------- */
+        JPanel selector = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        selector.add(hundreds); selector.add(new JLabel("×100"));
+        selector.add(tens);     selector.add(new JLabel("×10"));
+        selector.add(units);    selector.add(new JLabel("×1"));
+
+        /* табло — крупный текст */
+        countLbl.setFont(new Font("Monospaced", Font.BOLD, 28));
+        countLbl.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
+
+        JPanel topRow = new JPanel(new BorderLayout());
+        topRow.add(selector, BorderLayout.WEST);
+        topRow.add(countLbl, BorderLayout.EAST);
+
+        /* ---------- центральная область ---------- */
         JPanel center = new JPanel(new BorderLayout(5, 5));
         attachPopup(urlField);
 
-        center.add(selector, BorderLayout.NORTH);   // селекторы сверху
-        center.add(urlField,  BorderLayout.CENTER); // поле результата
-        center.add(statusLbl, BorderLayout.SOUTH);  // статус
+        center.add(topRow,   BorderLayout.NORTH);   // верхняя строка: селекторы + табло
+        center.add(urlField, BorderLayout.CENTER);  // результат
+        center.add(statusLbl,BorderLayout.SOUTH);   // статус
 
         add(center, BorderLayout.CENTER);
 
-        /* ---------- C. панель кнопок ---------- */
+        /* ---------- кнопки справа ---------- */
         JPanel east = new JPanel(new GridLayout(3, 1, 5, 5));
-        east.add(qrngBtn);   // Get QRNG (первой)
-        east.add(logsBtn);   // Show Logs
-        east.add(clearBtn);  // Clear
+        east.add(qrngBtn);
+        east.add(logsBtn);
+        east.add(clearBtn);
         add(east, BorderLayout.EAST);
 
-        /* ---------- обработчики ---------- */
+        /* обработчики */
         clearBtn.addActionListener(e -> {
             urlField.setText("");
             setStatus(LBL_DEFAULT);
@@ -88,12 +101,11 @@ public class VideoDownloaderUI extends JFrame {
         qrngBtn.addActionListener(e -> runQRNG());
     }
 
-    /* ────────── QRNG-логика ────────── */
+    /* ---------- QRNG ---------- */
     private void runQRNG() {
         int count = getSelectedCount();
         if (count == 0) {
-            setStatus("Count must be > 0");
-            return;
+            setStatus("Count must be > 0"); return;
         }
 
         qrngBtn.setEnabled(false);
@@ -104,7 +116,6 @@ public class VideoDownloaderUI extends JFrame {
             try {
                 int[] bytes = RandomFetcher.fetchBytes(count);
                 String text = Arrays.toString(bytes);
-
                 SwingUtilities.invokeLater(() -> {
                     urlField.setText(text);
                     setStatus("QRNG success (" + count + " bytes)");
@@ -121,23 +132,19 @@ public class VideoDownloaderUI extends JFrame {
         }, "QRNG-thread").start();
     }
 
-    /* ────────── helpers ────────── */
+    /* ---------- helpers ---------- */
     private int getSelectedCount() {
-        int h = (Integer) hundreds.getSelectedItem();
-        int t = (Integer) tens.getSelectedItem();
-        int u = (Integer) units.getSelectedItem();
-        return h * 100 + t * 10 + u;
+        return 100 * (Integer) hundreds.getSelectedItem()
+                + 10  * (Integer) tens.getSelectedItem()
+                +       (Integer) units.getSelectedItem();
     }
 
-    private static void attachPopup(JTextField field) {
-        JPopupMenu menu = new JPopupMenu();
-        JMenuItem copy = new JMenuItem("Copy"), paste = new JMenuItem("Paste"), cut = new JMenuItem("Cut");
-        copy.addActionListener(e -> field.copy());
-        paste.addActionListener(e -> field.paste());
-        cut.addActionListener(e -> field.cut());
-        menu.add(copy); menu.add(paste); menu.add(cut);
-        field.setComponentPopupMenu(menu);
+    private static void attachPopup(JTextField f) {
+        JPopupMenu m = new JPopupMenu();
+        JMenuItem c = new JMenuItem("Copy"), p = new JMenuItem("Paste"), x = new JMenuItem("Cut");
+        c.addActionListener(e -> f.copy());   p.addActionListener(e -> f.paste()); x.addActionListener(e -> f.cut());
+        m.add(c); m.add(p); m.add(x);  f.setComponentPopupMenu(m);
     }
 
-    private void setStatus(String msg) { statusLbl.setText(msg); }
+    private void setStatus(String s) { statusLbl.setText(s); }
 }
