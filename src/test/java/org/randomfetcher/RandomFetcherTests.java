@@ -1,10 +1,12 @@
 package org.randomfetcher;
 
+import org.junit.Assume;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.swing.*;
+import java.awt.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -47,6 +49,8 @@ class RandomFetcherTests {
         JTextArea area = getPrivateField(mgr, "logTextArea");
         assertNotNull(area, "Текстовая область должна быть инициализирована");
         assertTrue(area.getText().contains("Hello, logs!"));
+        Assume.assumeFalse(GraphicsEnvironment.isHeadless());
+
     }
 
     @Test

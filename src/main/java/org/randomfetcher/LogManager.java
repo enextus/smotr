@@ -49,12 +49,17 @@ public class LogManager {
      * Если окно ещё не создано, вызывает initializeLogContent().
      */
     public void showLogWindow() {
+        if (GraphicsEnvironment.isHeadless()) {
+            LOGGER.debug("Headless mode – UI disabled");   // ← исправили
+            return;
+        }
         if (logFrame == null) {
             initializeLogContent();
         }
         logFrame.setVisible(true);
         LOGGER.debug("Log window shown");
     }
+
 
     /**
      * Добавляет сообщение в текстовую область логов и записывает его через SLF4J.
