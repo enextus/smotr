@@ -1,5 +1,6 @@
 package org.randomfetcher;
 
+import org.assertj.swing.core.matcher.JButtonMatcher;
 import org.assertj.swing.edt.GuiActionRunner;
 import org.assertj.swing.fixture.FrameFixture;
 import org.assertj.swing.timing.Condition;
@@ -19,27 +20,23 @@ class RandomFetcherUiTests {
                 () -> new RandomFetcherUI(new LogManager())
         );
         frame = new FrameFixture(ui);
-        frame.show(); // обязателен для AssertJ-Swing
+        frame.show();               // обязательно!
     }
 
     @AfterEach
-    void tearDown() {
-        frame.cleanUp();
-    }
+    void tearDown() { frame.cleanUp(); }
 
     @Test
     void statusChangesAfterQrngClick() {
-        frame.button("Get QRNG").click();
+        // кликаем по имени, а не по тексту
+        frame.button("btnGetQrng").click();
 
-        // ждём, пока label начнёт с «QRNG», максимум 10 сек.
         pause(new Condition("status starts with QRNG") {
             @Override public boolean test() {
                 return frame.label("statusLbl").text().startsWith("QRNG");
             }
         }, 10_000);
 
-        // финальная проверка
-        assertThat(frame.label("statusLbl").text())
-                .startsWith("QRNG");
+        assertThat(frame.label("statusLbl").text()).startsWith("QRNG");
     }
 }

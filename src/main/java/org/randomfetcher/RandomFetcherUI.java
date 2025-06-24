@@ -44,6 +44,8 @@ public class RandomFetcherUI extends JFrame {
     /* stores the most recently fetched sequence (immutable) */
     private List<Integer> lastSequence = Collections.emptyList();
 
+
+
     public RandomFetcherUI(LogManager logManager) {
         this.logManager = logManager;
         initUI();
@@ -57,6 +59,14 @@ public class RandomFetcherUI extends JFrame {
         setSize(WIDTH, HEIGHT);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(5, 5));
+
+
+        qrngBtn.setName("btnGetQrng");
+        analyseBtn.setName("btnAnalyse");
+        logsBtn.setName("btnLogs");
+        clearBtn.setName("btnClear");
+        statusLbl.setName("statusLbl");
+
 
         /* populate combo boxes 0‑9 */
         for (int i = 0; i <= 9; i++) {
