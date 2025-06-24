@@ -51,6 +51,7 @@ public class RandomFetcherUI extends JFrame {
 
     /* ---------- UI ---------- */
     private void initUI() {
+        statusLbl.setName("statusLbl");
         setTitle("QRNG Demo");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(WIDTH, HEIGHT);
