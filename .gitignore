@@ -8,6 +8,9 @@ target/
 *.secret
 config/*.key
 
+# Mac OS
+.DS_Store
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml

@@ -3,22 +3,23 @@ package org.randomfetcher;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cdimascio.dotenv.Dotenv;     // +- dotenv
-import java.net.http.*;
+import io.github.cdimascio.dotenv.Dotenv;
+
 import java.net.URI;
+import java.net.http.*;
 import java.time.Duration;
 import java.util.List;
 
 public final class OpenAIAnalyzer {
 
-    /* 1) читаем переменную среды ИЛИ .env */
+    // 1) читаем переменную среды ИЛИ .env
     private static final String API_KEY = resolveApiKey();
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    private OpenAIAnalyzer() {}
+    private OpenAIAnalyzer() { }
 
     private static String resolveApiKey() {
         String k = System.getenv("OPENAI_API_KEY");
@@ -35,7 +36,6 @@ public final class OpenAIAnalyzer {
 
     /** Отправляет байтовую последовательность в GPT-3.5-Turbo. */
     public static String analyze(List<Integer> bytes) throws Exception {
-
         ObjectNode root = JSON.createObjectNode();
         root.put("model", "gpt-3.5-turbo");
         root.put("max_tokens", 250);
@@ -47,7 +47,7 @@ public final class OpenAIAnalyzer {
         messages.addObject()
                 .put("role", "user")
                 .put("content", STR."""
-Bytes (0-255) = \{bytes}
+Bytes (0–255) = \{bytes}
 Give a ≤120-word summary of their basic randomness metrics (uniformity, chi² / KS, autocorr, runs).
 """);
         root.set("messages", messages);

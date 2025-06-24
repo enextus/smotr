@@ -156,7 +156,6 @@ public class RandomFetcherUI extends JFrame {
     }
 
     /* ---------- Analyse ---------- */
-    /* ---------- Analyse ---------- */
     private void showAnalysis() {
         if (lastSequence.isEmpty()) {
             JOptionPane.showMessageDialog(this,
@@ -169,19 +168,27 @@ public class RandomFetcherUI extends JFrame {
             try {
                 String report = getString();
 
-                /* ──► GPT-3.5-Turbo: дополнительные инсайты */
                 try {
                     String gptReport = OpenAIAnalyzer.analyze(lastSequence);
                     logManager.appendLog("GPT-3.5 analysis done");
-                    report += "\n--- GPT-3.5-Turbo summary ---\n" + gptReport;
+                    report += STR."""
+
+<h3>🤖 GPT‑3.5‑Turbo Summary</h3>
+<p style='max-width:600px; font-family: sans-serif;'>\{gptReport}</p>
+""";
                 } catch (Exception ex) {
                     logManager.appendLog("LLM analysis failed: " + ex);
-                    report += "\n--- GPT-3.5-Turbo summary ---\n⚠ Error getting LLM answer: "
-                            + ex.getMessage();
+                    report += STR."""
+
+<h3>🤖 GPT‑3.5‑Turbo Summary</h3>
+<p style='color:red;'>⚠ Error getting LLM answer: \{ex.getMessage()}</p>
+""";
                 }
 
-                /* показываем всё сразу */
-                String finalReport = report;     // effectively final для лямбды
+                String finalReport = STR."""
+<html><body style='font-family: monospace;'><pre>\{report}</pre></body></html>
+""";
+
                 SwingUtilities.invokeLater(() -> showAnalysisWindow(finalReport));
 
             } catch (Exception ex) {
@@ -195,27 +202,23 @@ public class RandomFetcherUI extends JFrame {
     private @NotNull String getString() {
         RandomnessTester tester = new RandomnessTester(lastSequence, 0, 255);
 
-        String report = STR."""
+        return STR."""
 === Sequence analysis ===
-Count: \{lastSequence.size()}
-Kolmogorov–Smirnov (p > 0.05): \{tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed"}
-Chi-Square (8 bins): \{tester.chiSquareTest(8, 0.05) ? "Passed" : "Failed"}
-Runs-test (Wald–Wolfowitz): \{tester.runsTest(0.05) ? "Passed" : "Failed"}
-\{String.format("Autocorr (lag 1): %.4f\n", tester.autocorrelation(1))}
-Max consecutive repeats: \{tester.countConsecutiveRepeats()}
-CRC-32: 0x\{Long.toHexString(tester.crc32()).toUpperCase()}
+<b>Count:</b> \{lastSequence.size()}
+<b>Kolmogorov–Smirnov (p > 0.05):</b> \{tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed"}
+<b>Chi-Square (8 bins):</b> \{tester.chiSquareTest(8, 0.05) ? "Passed" : "Failed"}
+<b>Runs-test (Wald–Wolfowitz):</b> \{tester.runsTest(0.05) ? "Passed" : "Failed"}
+<b>Autocorr (lag 1):</b> \{String.format("%.4f", tester.autocorrelation(1))}
+<b>Max consecutive repeats:</b> \{tester.countConsecutiveRepeats()}
+<b>CRC-32:</b> 0x\{Long.toHexString(tester.crc32()).toUpperCase()}
 """;
-        return report;
     }
 
-
-    private void showAnalysisWindow(String text) {
-        JTextArea area = new JTextArea(text, 12, 40);
-        area.setEditable(false);
-        area.setFont(new Font("Monospaced", Font.PLAIN, 12));
-
-        JScrollPane scroll = new JScrollPane(area);
-        scroll.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+    private void showAnalysisWindow(String html) {
+        JEditorPane pane = new JEditorPane("text/html", html);
+        pane.setEditable(false);
+        JScrollPane scroll = new JScrollPane(pane);
+        scroll.setPreferredSize(new Dimension(640, 400));
 
         JDialog dlg = new JDialog(this, "Analysis", false);
         dlg.getContentPane().add(scroll);
