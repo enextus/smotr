@@ -129,7 +129,7 @@ public class RandomnessTester {
         int n1 = 0; // B – ≥ median
         int n0 = 0; // A – < median
 
-        int prev = sequence.get(0) >= median ? 1 : 0;
+        int prev = sequence.getFirst() >= median ? 1 : 0;
         if (prev == 1) n1++; else n0++;
 
         for (int i = 1; i < sequence.size(); i++) {
@@ -225,15 +225,6 @@ public class RandomnessTester {
         return map.entrySet().stream()
                 .filter(e -> e.getValue().size() > 1)
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
-    }
-
-    /**
-     * Исходная неизменяемая последовательность.
-     *
-     * @return копия последовательности
-     */
-    public List<Integer> getSequence() {
-        return sequence;
     }
 
     // =====

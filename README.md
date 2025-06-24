@@ -84,5 +84,13 @@ java -jar target/RandomFetcher-<version>.jar
 * **Guava** — general‑purpose helpers
 
 ---
+### 🔐  Настройка API-ключа
+
+1.  Скопируйте файл `.env.example` → `.env`.
+2.  Пропишите свой `OPENAI_API_KEY=…` в `.env`.
+3.  Перезапустите `mvn test` / IDE.
+
+> Файл `.env` исключён из Git (`.gitignore`).
+
 
 © 2025 RandomFetcher Team — MIT License

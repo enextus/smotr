@@ -60,7 +60,6 @@ public class LogManager {
         LOGGER.debug("Log window shown");
     }
 
-
     /**
      * Добавляет сообщение в текстовую область логов и записывает его через SLF4J.
      *
@@ -68,7 +67,9 @@ public class LogManager {
      */
     public void appendLog(String message) {
         if (logTextArea != null) {
-            logTextArea.append(message + "\n");
+            logTextArea.append(STR."""
+\{message}
+""");
             logTextArea.setCaretPosition(logTextArea.getDocument().getLength());
         }
         LOGGER.info(message);

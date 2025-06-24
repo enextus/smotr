@@ -1,11 +1,12 @@
 package org.randomfetcher;
 
+import org.jetbrains.annotations.NotNull;
+
 import javax.swing.*;
 import java.awt.*;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * Simple Swing front‑end for QRNG demo.
@@ -130,8 +131,8 @@ public class RandomFetcherUI extends JFrame {
         }
 
         qrngBtn.setEnabled(false);
-        setStatus("Requesting " + count + " random bytes…");
-        logManager.appendLog("QRNG request started (" + count + " bytes)");
+        setStatus(STR."Requesting \{count} random bytes…");
+        logManager.appendLog(STR."QRNG request started (\{count} bytes)");
 
         new Thread(() -> {
             try {
@@ -140,13 +141,13 @@ public class RandomFetcherUI extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     lastSequence = List.copyOf(list);
                     urlField.setText(list.toString());
-                    setStatus("QRNG success (" + count + " bytes)");
-                    logManager.appendLog("QRNG success: " + list);
+                    setStatus(STR."QRNG success (\{count} bytes)");
+                    logManager.appendLog(STR."QRNG success: \{list}");
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
-                    setStatus("QRNG error: " + ex.getMessage());
-                    logManager.appendLog("QRNG error: " + ex);
+                    setStatus(STR."QRNG error: \{ex.getMessage()}");
+                    logManager.appendLog(STR."QRNG error: \{ex}");
                 });
             } finally {
                 SwingUtilities.invokeLater(() -> qrngBtn.setEnabled(true));
@@ -154,6 +155,7 @@ public class RandomFetcherUI extends JFrame {
         }, "QRNG-thread").start();
     }
 
+    /* ---------- Analyse ---------- */
     /* ---------- Analyse ---------- */
     private void showAnalysis() {
         if (lastSequence.isEmpty()) {
@@ -165,31 +167,47 @@ public class RandomFetcherUI extends JFrame {
 
         new Thread(() -> {
             try {
-                RandomnessTester tester = new RandomnessTester(lastSequence, 0, 255);
-                StringBuilder sb = new StringBuilder();
+                String report = getString();
 
-                sb.append("=== Sequence analysis ===\n");
-                sb.append("Count: ").append(lastSequence.size()).append('\n');
-                sb.append("Kolmogorov–Smirnov (p > 0.05): ")
-                        .append(tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed").append('\n');
-                sb.append("Chi‑Square (8 bins): ")
-                        .append(tester.chiSquareTest(8, 0.05) ? "Passed" : "Failed").append('\n');
-                sb.append("Runs‑test (Wald–Wolfowitz): ")
-                        .append(tester.runsTest(0.05) ? "Passed" : "Failed").append('\n');
-                sb.append(String.format("Autocorr (lag 1): %.4f\n", tester.autocorrelation(1)));
-                sb.append("Max consecutive repeats: ")
-                        .append(tester.countConsecutiveRepeats()).append('\n');
-                sb.append("CRC‑32: 0x")
-                        .append(Long.toHexString(tester.crc32()).toUpperCase()).append('\n');
+                /* ──► GPT-3.5-Turbo: дополнительные инсайты */
+                try {
+                    String gptReport = OpenAIAnalyzer.analyze(lastSequence);
+                    logManager.appendLog("GPT-3.5 analysis done");
+                    report += "\n--- GPT-3.5-Turbo summary ---\n" + gptReport;
+                } catch (Exception ex) {
+                    logManager.appendLog("LLM analysis failed: " + ex);
+                    report += "\n--- GPT-3.5-Turbo summary ---\n⚠ Error getting LLM answer: "
+                            + ex.getMessage();
+                }
 
-                SwingUtilities.invokeLater(() -> showAnalysisWindow(sb.toString()));
+                /* показываем всё сразу */
+                String finalReport = report;     // effectively final для лямбды
+                SwingUtilities.invokeLater(() -> showAnalysisWindow(finalReport));
+
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
-                        "Error analysing sequence: " + ex.getMessage(),
+                        STR."Error analysing sequence: \{ex.getMessage()}",
                         "Analyse", JOptionPane.ERROR_MESSAGE));
             }
         }, "Analysis-thread").start();
     }
+
+    private @NotNull String getString() {
+        RandomnessTester tester = new RandomnessTester(lastSequence, 0, 255);
+
+        String report = STR."""
+=== Sequence analysis ===
+Count: \{lastSequence.size()}
+Kolmogorov–Smirnov (p > 0.05): \{tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed"}
+Chi-Square (8 bins): \{tester.chiSquareTest(8, 0.05) ? "Passed" : "Failed"}
+Runs-test (Wald–Wolfowitz): \{tester.runsTest(0.05) ? "Passed" : "Failed"}
+\{String.format("Autocorr (lag 1): %.4f\n", tester.autocorrelation(1))}
+Max consecutive repeats: \{tester.countConsecutiveRepeats()}
+CRC-32: 0x\{Long.toHexString(tester.crc32()).toUpperCase()}
+""";
+        return report;
+    }
+
 
     private void showAnalysisWindow(String text) {
         JTextArea area = new JTextArea(text, 12, 40);

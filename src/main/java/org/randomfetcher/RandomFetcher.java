@@ -17,8 +17,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Java-порт скрипта App_with_sqlite_debug.rb.
- *
+ * Java-порт скрипта App_with_sqlite_debug.
  * Запуск:  java --enable-preview -jar qrng-fetcher.jar <count>
  * where <count> — обязательное положительное целое.
  */
@@ -86,7 +85,7 @@ public final class RandomFetcher {
             log.error("SQLite error: {}", e.getMessage(), e);
             System.exit(1);
         } catch (Exception e) {
-            log.error("Fatal error: {}", e.toString(), e);
+            log.error("Fatal error: {}", e, e);
             System.exit(1);
         }
     }
@@ -155,7 +154,7 @@ public final class RandomFetcher {
 
     /* ======================= SQLite ======================= */
     private static Connection connectOrCreate(Path file) throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath());
+        return DriverManager.getConnection(STR."jdbc:sqlite:\{file.toAbsolutePath()}");
     }
 
     private static void createSchemaIfNeeded(Connection db) throws SQLException {
@@ -207,4 +206,5 @@ public final class RandomFetcher {
     }
 
     private RandomFetcher() { }  // запрет instantiation
+
 }

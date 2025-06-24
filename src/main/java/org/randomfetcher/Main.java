@@ -14,20 +14,16 @@ public class Main {
         System.out.println("=== Анализ последовательности ===");
 
         // Статистические тесты
-        System.out.println("Колмогоров-Смирнов (p > 0.05): " +
-                (tester.kolmogorovSmirnovTest(0.05) ? "Пройден" : "Не пройден"));
-        System.out.println("Хи-квадрат (8 bins): " +
-                (tester.chiSquareTest(8, 0.05) ? "Пройден" : "Не пройден"));
-        System.out.println("Runs-test (Wald–Wolfowitz): " +
-                (tester.runsTest(0.05) ? "Пройден" : "Не пройден"));
+        System.out.println(STR."Колмогоров-Смирнов (p > 0.05): \{tester.kolmogorovSmirnovTest(0.05) ? "Пройден" : "Не пройден"}");
+        System.out.println(STR."Хи-квадрат (8 bins): \{tester.chiSquareTest(8, 0.05) ? "Пройден" : "Не пройден"}");
+        System.out.println(STR."Runs-test (Wald–Wolfowitz): \{tester.runsTest(0.05) ? "Пройден" : "Не пройден"}");
         System.out.printf("Автокорреляция (лаг 1): %.4f%n", tester.autocorrelation(1));
-        System.out.println("Макс. длина повторений: " + tester.countConsecutiveRepeats());
+        System.out.println(STR."Макс. длина повторений: \{tester.countConsecutiveRepeats()}");
 
         // Инженерные тесты
-        System.out.println("CRC-32: " + Long.toHexString(tester.crc32()));
-        System.out.println("Поиск паттерна [230, 231]: Индекс = " +
-                tester.findPattern(Arrays.asList(230, 231)));
-        System.out.println("Дубликаты (числа с ≥2 вхождениями): " +
-                tester.duplicatePositions());
+        System.out.println(STR."CRC-32: \{Long.toHexString(tester.crc32())}");
+        System.out.println(STR."Поиск паттерна [230, 231]: Индекс = \{tester.findPattern(Arrays.asList(230, 231))}");
+        System.out.println(STR."Дубликаты (числа с ≥2 вхождениями): \{tester.duplicatePositions()}");
     }
+
 }
