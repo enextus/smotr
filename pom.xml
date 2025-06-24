@@ -155,6 +155,21 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
+    <profiles>
+        <!-- mvn test -DskipUi=true  (активирует этот профиль) -->
+        <profile>
+            <id>skip-ui</id>
+            <activation>
+                <property>
+                    <name>skipUi</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <properties>
+                <excluded.test.groups>ui</excluded.test.groups>
+            </properties>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>
@@ -162,15 +177,23 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+
                 <configuration>
+                    <!-- JDK 21 preview flags, как раньше -->
                     <useModulePath>false</useModulePath>
                     <argLine>
                         --enable-preview
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.lang.reflect=ALL-UNNAMED
                     </argLine>
+
+                    <!-- выключаем ui-тесты, если активирован профиль skip-ui -->
+                    <excludedGroups>${excluded.test.groups}</excludedGroups>
                 </configuration>
             </plugin>
+
+
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -179,6 +202,8 @@
                     <release>${maven.compiler.release}</release>
                     <compilerArgs>
                         <arg>--enable-preview</arg>
+                        <arg>--enable-preview</arg>
+                        <arg>-Xlint:preview</arg> <!-- показывает детали при необходимости -->
                     </compilerArgs>
                 </configuration>
             </plugin>
@@ -209,17 +234,25 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.4.2</version>
+                <version>3.4.2</version><!-- уже есть -->
                 <configuration>
                     <archive>
                         <manifest>
-                            <addClasspath>true</addClasspath>
-                            <classpathPrefix>lib/</classpathPrefix>
                             <mainClass>org.randomfetcher.App</mainClass>
                         </manifest>
+                        <manifestEntries>
+                            <!-- автофлаг превью + необходимые opens -->
+                            <Java-Command>
+                                --enable-preview
+                                --add-opens=java.base/java.lang=ALL-UNNAMED
+                                --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                                -jar ${project.build.finalName}-jar-with-dependencies.jar
+                            </Java-Command>
+                        </manifestEntries>
                     </archive>
                 </configuration>
             </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-deploy-plugin</artifactId>
