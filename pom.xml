@@ -30,8 +30,6 @@
     </properties>
 
     <dependencies>
-
-
         <dependency>
             <groupId>io.github.cdimascio</groupId>
             <artifactId>java-dotenv</artifactId>
@@ -156,44 +154,74 @@
         </dependency>
     </dependencies>
     <profiles>
-        <!-- mvn test -DskipUi=true  (активирует этот профиль) -->
+        <!-- mvn verify -DincludeUi=true -->
         <profile>
-            <id>skip-ui</id>
+            <id>include-ui</id>
             <activation>
                 <property>
-                    <name>skipUi</name>
+                    <name>includeUi</name>
                     <value>true</value>
                 </property>
             </activation>
             <properties>
-                <excluded.test.groups>ui</excluded.test.groups>
+                <skipUi>true</skipUi>                       <!-- Failsafe -->
+                <excluded.test.tags>ui</excluded.test.tags> <!-- Surefire -->
             </properties>
         </profile>
     </profiles>
 
     <build>
+
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.3.1</version>
+
+                <configuration>
+                    <!-- та же argLine -->
+                    <!--suppress UnresolvedMavenProperty -->
+                    <argLine>${surefire.argLine}</argLine>
+
+                    <!-- запускаем только файлы, содержащие Ui в имени -->
+                           <includes>
+                               <include>**/*UiIT*</include>   <!-- например RandomFetcherUiIT -->
+                           </includes>
+
+                    <!-- по-умолчанию не гоняем; активируем -DincludeUi=true -->
+                    <!--suppress UnresolvedMavenProperty -->
+                    <skip>${skipUi}</skip>
+
+                    <!-- отдельный JVM на каждый тест, чтобы Swing-трейды не мешали -->
+                    <forkCount>1</forkCount>
+                    <reuseForks>false</reuseForks>
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--  Surefire = unit-tests  -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
 
                 <configuration>
-                    <!-- JDK 21 preview flags, как раньше -->
                     <useModulePath>false</useModulePath>
                     <argLine>
                         --enable-preview
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.lang.reflect=ALL-UNNAMED
+                        --add-opens java.base/java.util=ALL-UNNAMED
                     </argLine>
-
-                    <!-- выключаем ui-тесты, если активирован профиль skip-ui -->
-                    <excludedGroups>${excluded.test.groups}</excludedGroups>
                 </configuration>
             </plugin>
-
-
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
