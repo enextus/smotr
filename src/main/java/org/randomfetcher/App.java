@@ -8,7 +8,21 @@ import javax.swing.SwingUtilities;
  */
 public class App {
 
-    public static void main(String[] args) {
+    @SuppressWarnings("unused")
+    public static void main(String[] args) throws ClassNotFoundException {
+
+        try {
+            // Регистрируем SQLite JDBC-драйвер вручную
+            Class.forName("org.sqlite.JDBC");
+
+            LogManager logManager = new LogManager();
+            RandomFetcherUI ui = new RandomFetcherUI(logManager);
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         SwingUtilities.invokeLater(() -> {
             // Менеджер логов (окно + SLF4J)
             LogManager logManager = new LogManager();

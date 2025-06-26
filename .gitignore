@@ -4,6 +4,7 @@ target/
 !**/src/test/**/target/
 
 .idea/dictionaries/project.xml
+config.properties
 
 # ─── secrets ─────────────────────────────────────
 .env

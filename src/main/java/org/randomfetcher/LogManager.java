@@ -67,9 +67,7 @@ public class LogManager {
      */
     public void appendLog(String message) {
         if (logTextArea != null) {
-            logTextArea.append(STR."""
-\{message}
-""");
+            logTextArea.append(message + System.lineSeparator());
             logTextArea.setCaretPosition(logTextArea.getDocument().getLength());
         }
         LOGGER.info(message);

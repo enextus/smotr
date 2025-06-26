@@ -1,61 +1,65 @@
 package org.randomfetcher;
 
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.github.cdimascio.dotenv.Dotenv;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.Properties;
 
-public final class OpenAIAnalyzer {
+public class OpenAIAnalyzer {
 
-    // 1) читаем переменную среды ИЛИ .env
-    private static final String API_KEY = resolveApiKey();
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+    private static final String apiKey = resolveApiKey();
 
-    private OpenAIAnalyzer() { }
-
-    private static String resolveApiKey() {
-        String k = System.getenv("OPENAI_API_KEY");
-        if (k == null || k.isBlank()) {
-            // .env в корне проекта (java-dotenv ищет автоматически)
-            Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-            k = dotenv.get("OPENAI_API_KEY");
-        }
-        if (k == null || k.isBlank())
-            throw new IllegalStateException(
-                    "OPENAI_API_KEY not set (env var or .env)");
-        return k;
+    public static String getApiKey() {
+        return apiKey;
     }
 
-    /** Отправляет байтовую последовательность в GPT-3.5-Turbo. */
+    private static String resolveApiKey() {
+        String key = System.getenv("OPENAI_API_KEY");
+        if (key != null) return key;
+
+        Properties props = new Properties();
+        try (FileInputStream fis = new FileInputStream("config.properties")) {
+            props.load(fis);
+            key = props.getProperty("openai.api.key");
+        } catch (IOException ignored) {
+        }
+
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("OPENAI_API_KEY not set (neither env var nor config.properties)");
+        }
+
+        return key;
+    }
+
     public static String analyze(List<Integer> bytes) throws Exception {
         ObjectNode root = JSON.createObjectNode();
         root.put("model", "gpt-3.5-turbo");
-        root.put("max_tokens", 250);
+        root.put("max_tokens", 1050);
 
         ArrayNode messages = JSON.createArrayNode();
         messages.addObject()
-                .put("role", "system")
-                .put("content", "You are a terse, precise statistician who explains randomness-test results in plain language.");
-        messages.addObject()
                 .put("role", "user")
-                .put("content", STR."""
-Bytes (0–255) = \{bytes}
-Give a ≤120-word summary of their basic randomness metrics (uniformity, chi² / KS, autocorr, runs).
-""");
+                .put("content", String.format("""
+                        +Bytes (0–255) = %s
+                        +Give a ≤520-word summary of their basic randomness metrics (uniformity, chi² / KS, autocorr, runs).
+                        +""", bytes));
         root.set("messages", messages);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.openai.com/v1/chat/completions"))
                 .timeout(Duration.ofSeconds(30))
-                .header("Authorization", "Bearer " + API_KEY)
+                .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(root)))
                 .build();

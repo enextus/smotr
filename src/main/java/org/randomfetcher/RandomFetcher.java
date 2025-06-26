@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 public final class RandomFetcher {
 
     private static final Logger log   = LoggerFactory.getLogger(RandomFetcher.class);
-    private static final ObjectMapper JSON  = new ObjectMapper();
+    static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient   HTTP  = HttpClient.newHttpClient();
 
     /* ------- описание API (record-класс) ------- */
@@ -154,7 +154,8 @@ public final class RandomFetcher {
 
     /* ======================= SQLite ======================= */
     private static Connection connectOrCreate(Path file) throws SQLException {
-        return DriverManager.getConnection(STR."jdbc:sqlite:\{file.toAbsolutePath()}");
+        return DriverManager.getConnection(String.format("jdbc:sqlite:%s", file.toAbsolutePath()));
+
     }
 
     private static void createSchemaIfNeeded(Connection db) throws SQLException {
