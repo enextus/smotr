@@ -10,49 +10,81 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 /**
- * Updated Swing front‑end for QRNG demo.
- * <p>
- * Changes vs. v1:
+ * <h1>RandomFetcherUI</h1>
+ *
+ * Обновлённый GUI‑фронтенд демонстрационной программы для работы с квантовым
+ * генератором случайных чисел (QRNG).
+ *
+ * <h2>Ключевые изменения по сравнению с первой версией</h2>
  * <ul>
- *   <li>Correct initialisation (initUI() is now public and always called on EDT).</li>
- *   <li>All long‑running tasks migrated to {@link SwingWorker} for proper threading.</li>
- *   <li>Null‑checks via {@link Objects#requireNonNull(Object)}.</li>
- *   <li>Tiny clean‑ups & small UX tweaks.</li>
+ *     <li>❶ Вместо трёх «сотни / десятки / единицы» введён {@link JSpinner},
+ *         куда можно ввести 1…100 000 байт, а также добавлены четыре
+ *         кнопки‑пресета: 128 / 512 / 2048 / 100 000.</li>
+ *     <li>❷ Если пользователь пытается анализировать выборку &lt; 40 байт,
+ *         появляется предупреждение и «автосовет» увеличить объём.</li>
+ *     <li>❸ Все фоновые операции (запрос QRNG, обращение к LLM) выполнены
+ *         через {@link SwingWorker} — корректная работа с потоками Swing.</li>
+ *     <li>❹ В LLM‑prompt передаются точные p‑values статистических тестов,
+ *         что делает ответ модели более содержательным.</li>
+ *     <li>❺ Мелкие улучшения UX: выравнивание полей, логирование, null‑checks.</li>
  * </ul>
+ *
+ * <p>Файл снабжён обильными комментариями, чтобы любой разработчик мог быстро
+ * разобраться в логике и при необходимости внести изменения.</p>
  */
 @SuppressWarnings({"serial", "initialization"})
 public class RandomFetcherUI extends JFrame {
+
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /* -------------------- UI widgets -------------------- */
-    private final JComboBox<Integer> hundreds = new JComboBox<>();
-    private final JComboBox<Integer> tens     = new JComboBox<>();
-    private final JComboBox<Integer> units    = new JComboBox<>();
+    /* ------------------------------------------------------------------ *
+     *                1.  К О М П О Н Е Н Т Ы   И   П О Л Я               *
+     * ------------------------------------------------------------------ */
 
-    private final JLabel  statusLbl = new JLabel(LBL_DEFAULT);
-    private final JLabel  countLbl  = new JLabel("016", SwingConstants.CENTER);
+    /* ---------- новый селектор количества байтов ---------- */
+    private final JSpinner spinner = new JSpinner(new SpinnerNumberModel(
+            16,          // значение по умолчанию
+            1,           // минимум
+            100_000,     // максимум
+            1));         // шаг
+
+    /* метка статуса (низ окна) и крупная метка текущего значения */
+    private final JLabel statusLbl = new JLabel(LBL_DEFAULT);
+    private final JLabel countLbl  = new JLabel("16", SwingConstants.CENTER);
+
+    /* поле, куда выводится полученная последовательность */
     private final JTextField urlField = new JTextField(30);
 
+    /* кнопки */
     private final JButton clearBtn   = new JButton("Clear");
     private final JButton logsBtn    = new JButton("Show Logs");
     private final JButton qrngBtn    = new JButton("Get QRNG");
     private final JButton analyseBtn = new JButton("Analyse");
 
+    /* менеджер логов (вывод в файл + всплывающее окно) */
     private final LogManager logManager;
 
+    /* последняя полученная последовательность */
     private volatile List<Integer> lastSequence = Collections.emptyList();
 
-    /* ---- constants ---- */
-    private static final int WIDTH = 580, HEIGHT = 190;
-    private static final String LBL_DEFAULT = "Select amount & press Get QRNG";
+    /* --- константы оформления --- */
+    private static final int WIDTH = 650, HEIGHT = 220;
+    private static final String LBL_DEFAULT = "Select size & press Get QRNG";
 
-    /* ==================================================== */
+    /* ------------------------------------------------------------------ *
+     *                       2.   К О Н С Т Р У К Т О Р                    *
+     * ------------------------------------------------------------------ */
+
     public RandomFetcherUI(LogManager logManager) {
         this.logManager = Objects.requireNonNull(logManager);
     }
 
-    /** Entry helper: build and show UI on EDT. */
+    /* ------------------------------------------------------------------ *
+     *               3.  С Т А Т И Ч Е С К И Й   C R E A T E               *
+     * ------------------------------------------------------------------ */
+
+    /** Удобный метод: построить и сразу показать окно на EDT. */
     public static void createAndShow(LogManager manager) {
         EventQueue.invokeLater(() -> {
             RandomFetcherUI ui = new RandomFetcherUI(manager);
@@ -61,50 +93,61 @@ public class RandomFetcherUI extends JFrame {
         });
     }
 
-    /** Initialises Swing components (call on EDT!). */
+    /* ------------------------------------------------------------------ *
+     *                        4.   И Н И Ц И А Л И З А Ц И Я               *
+     * ------------------------------------------------------------------ */
+
+    /** Построение всех Swing‑компонентов. Вызывать только из EDT! */
     public void initUI() {
+        /* --- общие свойства окна --- */
         setTitle("QRNG Demo");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(WIDTH, HEIGHT);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(5, 5));
 
-        /* ---------- populate combos ---------- */
-        for (int i = 0; i <= 9; i++) {
-            hundreds.addItem(i);
-            tens.addItem(i);
-            units.addItem(i);
+        /* ---------- 4.1 Блок выбора размера ---------- */
+        // Форматируем текстовое поле спиннера
+        JComponent editor = spinner.getEditor();
+        if (editor instanceof JSpinner.DefaultEditor de) {
+            de.getTextField().setHorizontalAlignment(SwingConstants.CENTER);
         }
-        tens.setSelectedItem(1);
-        units.setSelectedItem(6);
 
-        /* ---------- selectors ---------- */
-        Runnable updateCount = () -> countLbl.setText(String.format("%03d", getSelectedCount()));
-        hundreds.addActionListener(e -> updateCount.run());
-        tens.addActionListener(e -> updateCount.run());
-        units.addActionListener(e -> updateCount.run());
+        // Кнопки‑пресеты
+        JButton b128  = presetButton("128");
+        JButton b512  = presetButton("512");
+        JButton b2k   = presetButton("2048");
+        JButton b100k = presetButton("100000");
 
         JPanel selector = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        selector.add(hundreds); selector.add(new JLabel("×100"));
-        selector.add(tens);     selector.add(new JLabel("×10"));
-        selector.add(units);    selector.add(new JLabel("×1"));
+        selector.add(new JLabel("Bytes:"));
+        selector.add(spinner);
+        selector.add(b128);
+        selector.add(b512);
+        selector.add(b2k);
+        selector.add(b100k);
 
-        countLbl.setFont(new Font("Monospaced", Font.BOLD, 28));
+        // Крупный счётчик справа
+        countLbl.setFont(new Font("Monospaced", Font.BOLD, 32));
         countLbl.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
+
+        // При изменении спиннера обновляем countLbl
+        spinner.addChangeListener(e ->
+                countLbl.setText(spinner.getValue().toString()));
 
         JPanel topRow = new JPanel(new BorderLayout());
         topRow.add(selector, BorderLayout.WEST);
         topRow.add(countLbl,  BorderLayout.EAST);
 
-        /* ---------- centre ---------- */
+        /* ---------- 4.2 Центральная панель ---------- */
         JPanel centre = new JPanel(new BorderLayout(5, 5));
-        attachPopup(urlField);
+        attachPopup(urlField);                  // контекстное меню copy/paste
         centre.add(topRow, BorderLayout.NORTH);
         centre.add(urlField, BorderLayout.CENTER);
         centre.add(statusLbl, BorderLayout.SOUTH);
         add(centre, BorderLayout.CENTER);
 
-        /* ---------- buttons ---------- */
+        /* ---------- 4.3 Кнопки справа ---------- */
         JPanel east = new JPanel(new GridLayout(4, 1, 5, 5));
         east.add(qrngBtn);
         east.add(analyseBtn);
@@ -112,7 +155,7 @@ public class RandomFetcherUI extends JFrame {
         east.add(clearBtn);
         add(east, BorderLayout.EAST);
 
-        /* ---------- actions ---------- */
+        /* ---------- 4.4 Обработчики ---------- */
         clearBtn.addActionListener(e -> {
             urlField.setText("");
             setStatus(LBL_DEFAULT);
@@ -129,17 +172,29 @@ public class RandomFetcherUI extends JFrame {
         analyseBtn.addActionListener(e -> showAnalysis());
     }
 
-    /* ==================================================== */
+    /* ------------------------------------------------------------------ *
+     *                       5.  Л О Г И К А   К Н О П О К                *
+     * ------------------------------------------------------------------ */
+
+    /** Фоновый запрос QRNG, запись результатов и обновление UI. */
     private void runQRNG() {
         final int count = getSelectedCount();
-        if (count == 0) {
-            setStatus("Count must be > 0");
-            return;
+
+        /* --- 5.1 Проверка лимитов и предупредительное сообщение --- */
+        if (count < 40) {
+            logManager.appendLog("⚠ sample < 40 bytes – low statistical power");
+            JOptionPane.showMessageDialog(this,
+                    "Выборка меньше 40 байт; результаты тестов будут ориентировочны.\n"
+                            + "Совет: попробуйте 128 или 256 байт.",
+                    "Too small sample", JOptionPane.INFORMATION_MESSAGE);
         }
+
+        /* --- 5.2 Подготовка UI и логов --- */
         qrngBtn.setEnabled(false);
         setStatus("Requesting " + count + " random bytes…");
         logManager.appendLog("QRNG request started (" + count + " bytes)");
 
+        /* --- 5.3 Фоновая задача --- */
         SwingWorker<List<Integer>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<Integer> doInBackground() throws Exception {
@@ -150,7 +205,7 @@ public class RandomFetcherUI extends JFrame {
             @Override
             protected void done() {
                 try {
-                    lastSequence = get();
+                    lastSequence = get();                 // результат
                     urlField.setText(lastSequence.toString());
                     setStatus("QRNG success (" + count + " bytes)");
                     logManager.appendLog("QRNG success: " + lastSequence);
@@ -166,7 +221,7 @@ public class RandomFetcherUI extends JFrame {
         worker.execute();
     }
 
-    /* ==================================================== */
+    /** Окно детального анализа + запрос LLM. */
     private void showAnalysis() {
         if (lastSequence.isEmpty()) {
             JOptionPane.showMessageDialog(this,
@@ -180,19 +235,52 @@ public class RandomFetcherUI extends JFrame {
         SwingWorker<String, Void> worker = new SwingWorker<>() {
             @Override
             protected String doInBackground() throws Exception {
-                StringBuilder report = new StringBuilder(buildLocalReport());
+                /* --- 1) Локальные тесты --- */
+                RandomnessTester t = new RandomnessTester(lastSequence, 0, 255);
+
+                String local = String.format("""
+=== Sequence analysis ===
+<b>Count:</b> %d
+<b>Kolmogorov–Smirnov:</b> p = %.4f  ⇒ %s
+<b>Chi-Square (8 bins):</b> χ² = %.2f, p = %.4f  ⇒ %s
+<b>Runs-test:</b> z = %.3f, p = %.4f  ⇒ %s
+<b>Autocorr (lag 1):</b> %.4f
+<b>Max consecutive repeats:</b> %d
+<b>CRC-32:</b> 0x%X
+""",
+                        lastSequence.size(),
+                        t.ksPValue(),   t.ksPValue()   > 0.05 ? "Passed" : "Failed",
+                        t.chiSquare(),  t.chiPValue(), t.chiPValue() > 0.05 ? "Passed" : "Failed",
+                        t.runsZ(),      t.runsPValue(), t.runsPValue()> 0.05 ? "Passed" : "Failed",
+                        t.autocorrelation(1),
+                        t.countConsecutiveRepeats(),
+                        t.crc32());
+
+                /* --- 2) Формируем prompt для LLM, включая p‑values --- */
+                String prompt = """
+Bytes: %s
+%s
+На русском и английском, ≤150 слов на язык: 
+суммируй, какие тесты прошли/не прошли, и оцени репрезентативность выборки.
+""".formatted(lastSequence, local.replace("\n", "\\n"));
+
+                /* --- 3) LLM --- */
+                String gpt;
                 try {
-                    String gpt = OpenAIAnalyzer.analyze(lastSequence);
+                    gpt = OpenAIAnalyzer.analyzeWithPrompt(prompt);
                     logManager.appendLog("LLM analysis done");
-                    report.append("\n<h3>🤖 LLM Summary</h3><p style='max-width:600px; font-family: sans-serif;'>")
-                            .append(gpt)
-                            .append("</p>");
                 } catch (Exception ex) {
+                    gpt = "<span style='color:red;'>⚠ LLM error: " + ex.getMessage() + "</span>";
                     logManager.appendLog("LLM analysis failed: " + ex);
-                    report.append("\n<h3>🤖 LLM Summary</h3><p style='color:red;'>⚠ Error: ")
-                            .append(ex.getMessage()).append("</p>");
                 }
-                return "<html><body style='font-family: monospace;'><pre>" + report + "</pre></body></html>";
+
+                /* --- 4) Финальный HTML --- */
+                return """
+<html><body style='font-family: monospace;'>
+<pre>%s</pre>
+<h3>🤖 LLM Summary</h3>
+<div style='max-width:600px; font-family: sans-serif;'>%s</div>
+</body></html>""".formatted(local, gpt);
             }
 
             @Override
@@ -212,11 +300,16 @@ public class RandomFetcherUI extends JFrame {
         worker.execute();
     }
 
-    /* ==================================================== */
+    /* ------------------------------------------------------------------ *
+     *                        6.   В С П О М О Г А Т Е Л Ь Н О Е          *
+     * ------------------------------------------------------------------ */
+
+    /** Возвратить текущее значение спиннера. */
     int getSelectedCount() {
-        return hundreds.getSelectedIndex() * 100 + tens.getSelectedIndex() * 10 + units.getSelectedIndex();
+        return (Integer) spinner.getValue();
     }
 
+    /** Создать маленькое контекстное меню Copy/Paste/Cut. */
     static void attachPopup(JTextField f) {
         JPopupMenu m = new JPopupMenu();
         JMenuItem c = new JMenuItem("Copy"), p = new JMenuItem("Paste"), x = new JMenuItem("Cut");
@@ -227,35 +320,22 @@ public class RandomFetcherUI extends JFrame {
         f.setComponentPopupMenu(m);
     }
 
+    /** Установить статус‑строку. */
     void setStatus(String s) { statusLbl.setText(s); }
 
-    /* ==================================================== */
-    private String buildLocalReport() {
-        RandomnessTester tester = new RandomnessTester(lastSequence, 0, 255);
-        return String.format("""
-=== Sequence analysis ===
-<b>Count:</b> %d
-<b>Kolmogorov–Smirnov (p > 0.05):</b> %s
-<b>Chi-Square (8 bins):</b> %s
-<b>Runs-test (Wald–Wolfowitz):</b> %s
-<b>Autocorr (lag 1):</b> %.4f
-<b>Max consecutive repeats:</b> %d
-<b>CRC-32:</b> 0x%X
-""",
-                lastSequence.size(),
-                tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed",
-                tester.chiSquareTest(8, 0.05)      ? "Passed" : "Failed",
-                tester.runsTest(0.05)              ? "Passed" : "Failed",
-                tester.autocorrelation(1),
-                tester.countConsecutiveRepeats(),
-                tester.crc32());
+    /** Маленький фабричный метод для кнопки‑пресета. */
+    private JButton presetButton(String txt) {
+        JButton b = new JButton(txt.replace("00000", "100 000"));  // тонкий трюк: добавляем пробел‑NARROW NBSP
+        b.addActionListener(e -> spinner.setValue(Integer.parseInt(txt)));
+        return b;
     }
 
+    /** Показать HTML‑отчёт в модальном диалоге. */
     private void showAnalysisWindow(String html) {
         JEditorPane pane = new JEditorPane("text/html", html);
         pane.setEditable(false);
         JScrollPane scroll = new JScrollPane(pane);
-        scroll.setPreferredSize(new Dimension(640, 400));
+        scroll.setPreferredSize(new Dimension(700, 450));
 
         JDialog dlg = new JDialog(this, "Analysis", false);
         dlg.getContentPane().add(scroll);
@@ -264,7 +344,11 @@ public class RandomFetcherUI extends JFrame {
         dlg.setVisible(true);
     }
 
-    /* ==================================================== */
+    /* ------------------------------------------------------------------ *
+     *                    7.  P U B L I C   S T A R T E R                  *
+     * ------------------------------------------------------------------ */
+
+    /** Точка входа «как утилита». */
     public static void main(String[] args) {
         EventQueue.invokeLater(() -> {
             RandomFetcherUI ui = new RandomFetcherUI(new LogManager());

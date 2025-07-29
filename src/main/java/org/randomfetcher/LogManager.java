@@ -5,102 +5,137 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Менеджер логов приложения.
  *
- * <h2>Что делает класс</h2>
- * <ul>
- *     <li>Логирует сообщения через SLF4J / Logback (файл, консоль — зависит от конфигурации).</li>
- *     <li>При необходимости выводит сообщения в небольшое Swing‑окно.</li>
- *     <li>Создаёт UI лениво — ровно в момент первого показа.</li>
- *     <li>Потокобезопасен: любые модификации Swing‑компонентов выполняются в EDT.<br>
- *         И сами ссылки на компоненты объявлены <code>volatile</code> для корректной видимости.</li>
- *     <li>Ограничивает размер внутреннего текстового буфера (кольцевой усечение), чтобы окно
- *         не «распухало» на гигабайты при длительной работе.</li>
- * </ul>
+ * === RU ===
+ * Основные функции:
+ *  - Записывает сообщения в лог (консоль/файл, в зависимости от SLF4J конфигурации).
+ *  - Может показывать отдельное Swing-окно с текстовой областью логов.
+ *  - UI создаётся "лениво" — только при первом вызове showLogWindow().
+ *  - Обеспечивает потокобезопасность для UI.
+ *  - Хранит backlog — сообщения, пришедшие до появления окна, и отображает их при инициализации.
+ *  - Ограничивает объём буфера, чтобы окно не «распухало».
+ *
+ * === EN ===
+ * Main responsibilities:
+ *  - Logs messages to console or file via SLF4J (Logback-configurable).
+ *  - Optionally shows a Swing window displaying live log messages.
+ *  - UI is lazily initialized — only when showLogWindow() is first called.
+ *  - Ensures thread-safety for Swing components.
+ *  - Maintains a backlog of messages received before the window exists and flushes them upon creation.
+ *  - Limits text area buffer to avoid memory bloat.
  */
 public final class LogManager {
 
-    /* ------------------------------------------------------------------ *
-     *                 1. П О Л Я   И   К О Н С Т А Н Т Ы                 *
-     * ------------------------------------------------------------------ */
+    // -----------------------------------------------------------------------
+    // 1. ПОЛЯ И КОНСТАНТЫ / FIELDS AND CONSTANTS
+    // -----------------------------------------------------------------------
 
-    /** Логгер (конкретный вывод задаётся logback.xml). */
+    /** SLF4J логгер — вывод идёт по настройке logback.xml. */
     private static final Logger LOGGER = LoggerFactory.getLogger(LogManager.class);
 
-    /** Максимальный объём текста в окне (≈ 100 кБ). */
+    /** Максимальное количество символов в текстовой области (~100 кБ). */
     private static final int MAX_CHARS = 100_000;
 
-    /** Окно‑контейнер. <br>volatile — чтобы другие потоки «увидели» созданный объект. */
+    /** Основное окно логов. Volatile — чтобы другие потоки "увидели" его. */
     private volatile JFrame logFrame;
 
-    /** Текстовая область для вывода логов. */
+    /** Swing-компонент: область, куда пишутся сообщения. */
     private volatile JTextArea logTextArea;
 
-    /* ------------------------------------------------------------------ *
-     *                      2.   К О Н С Т Р У К Т О Р                    *
-     * ------------------------------------------------------------------ */
+    /**
+     * Буфер сообщений, пришедших до появления окна.
+     * synchronizedList — для безопасной работы из разных потоков.
+     * Эти строки будут отображены при первом создании UI.
+     */
+    private final List<String> backlog =
+            Collections.synchronizedList(new ArrayList<>());
 
-    /** Создаём объект. Само окно пока не строим — это «ленивая» часть. */
+    // -----------------------------------------------------------------------
+    // 2. КОНСТРУКТОР / CONSTRUCTOR
+    // -----------------------------------------------------------------------
+
+    /**
+     * Конструктор. UI ещё не создаётся — он ленивый.
+     * Просто логгирует и готовит внутренние поля.
+     */
     public LogManager() {
         LOGGER.info("LogManager initialized");
     }
 
-    /* ------------------------------------------------------------------ *
-     *             3.   В Н У Т Р Е Н Н И Е   М Е Т О Д Ы                 *
-     * ------------------------------------------------------------------ */
+    // -----------------------------------------------------------------------
+    // 3. ВНУТРЕННИЕ МЕТОДЫ / INTERNAL METHODS
+    // -----------------------------------------------------------------------
 
     /**
-     * Фактическое создание UI‑окна и всех его компонентов.
-     * <p><strong>Должно запускаться в EDT!</strong><br>
-     * Внешний код гарантирует это через {@link SwingUtilities#invokeAndWait(Runnable)} либо
-     * прямой вызов, если уже находится в EDT.</p>
+     * Инициализация UI-компонентов: создаёт окно, текстовую область и заливает backlog.
+     *
+     * === RU ===
+     * Метод **должен** вызываться из EDT (Event Dispatch Thread).
+     * Обычно вызывается через invokeAndWait() из showLogWindow().
+     *
+     * === EN ===
+     * This method **must** run on the EDT.
+     * It is typically invoked via invokeAndWait() inside showLogWindow().
      */
     private void initializeLogContent() {
-        /* ---------- создаём окно ---------- */
+        // 1. Создаём Swing-окно
         logFrame = new JFrame("Logs");
         logFrame.setSize(400, 300);
         logFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
 
-        /* ---------- текстовая область ---------- */
+        // 2. Текстовая область (не редактируемая)
         logTextArea = new JTextArea();
-        logTextArea.setEditable(false);      // только просмотр
-        logTextArea.setLineWrap(true);       // перенос строк
-        logTextArea.setWrapStyleWord(true);  // перенос по словам
+        logTextArea.setEditable(false);
+        logTextArea.setLineWrap(true);
+        logTextArea.setWrapStyleWord(true);
 
-        /* ---------- прокрутка ---------- */
+        // 3. Добавляем прокрутку
         JScrollPane scrollPane = new JScrollPane(logTextArea);
         logFrame.add(scrollPane, BorderLayout.CENTER);
+
+        // 4. Выводим накопленные строки backlog (если были)
+        backlog.forEach(s -> logTextArea.append(s + System.lineSeparator()));
+        backlog.clear();
+
+        // 5. Автопрокрутка вниз (чтобы сразу видеть последние строки)
+        SwingUtilities.invokeLater(() ->
+                logTextArea.setCaretPosition(logTextArea.getDocument().getLength())
+        );
 
         LOGGER.info("Log window initialized");
     }
 
-    /* ------------------------------------------------------------------ *
-     *                 4.   П У Б Л И Ч Н Ы Е   М Е Т О Д Ы               *
-     * ------------------------------------------------------------------ */
+    // -----------------------------------------------------------------------
+    // 4. ПУБЛИЧНЫЕ МЕТОДЫ / PUBLIC METHODS
+    // -----------------------------------------------------------------------
 
     /**
-     * Показать окно логов. <br>
-     * Если приложение запущено в headless‑режиме (без графики), просто фиксируем событие и выходим.
+     * Показывает окно логов.
+     * Если графики нет (например, серверный режим) — ничего не делает.
      */
     public void showLogWindow() {
-        // 1) Никакого GUI в headless
+        // 1. Проверяем режим без графики
         if (GraphicsEnvironment.isHeadless()) {
             LOGGER.debug("Headless mode – UI disabled");
             return;
         }
 
-        // 2) Создаём окно при первом вызове
+        // 2. Создаём окно при первом вызове
         if (logFrame == null) {
-            // Runnable, который реально строит окно
             Runnable initTask = this::initializeLogContent;
 
-            // Вызываем корректно в EDT
             if (SwingUtilities.isEventDispatchThread()) {
+                // Уже в EDT — можно сразу вызывать
                 initTask.run();
             } else {
                 try {
+                    // Иначе безопасно передаём в EDT
                     SwingUtilities.invokeAndWait(initTask);
                 } catch (Exception e) {
                     LOGGER.error("Unable to init log window", e);
@@ -109,54 +144,59 @@ public final class LogManager {
             }
         }
 
-        // 3) Теперь окно точно существует — показываем
+        // 3. Показываем окно
         logFrame.setVisible(true);
-        logFrame.toFront();       // выводим поверх
+        logFrame.toFront(); // Поверх всех
         LOGGER.debug("Log window shown");
     }
 
     /**
-     * Записать строку лога в файл/консоль и, при наличии UI, отобразить в окне.
+     * Записывает строку в лог (файл/консоль) и в UI (если он существует).
      *
-     * @param message текст без символа перевода строки
+     * @param message строка без символа новой строки (он добавляется автоматически)
      */
     public void appendLog(String message) {
-        /* ---------- 1. Пишем в системный лог (файл/консоль) ---------- */
+        // 1. Запись в основной логгер
         LOGGER.info(message);
 
-        /* ---------- 2. UI‑часть: если окно ещё не создано — выходим ---- */
-        if (logTextArea == null) return;
+        // 2. Если окно ещё не создано — добавляем в backlog и выходим
+        if (logTextArea == null) {
+            backlog.add(message);
+            return;
+        }
 
-        /* ---------- 3. Обновление окна (должно быть в EDT) ------------ */
+        // 3. Готовим обновление UI
         Runnable updateUI = () -> {
-            if (logTextArea == null) return;  // окно могли закрыть
+            if (logTextArea == null) return; // Окно могли закрыть
 
-            /* 3.1 Ограничиваем буфер:
-                   если длина превышает лимит, обрезаем ~10 % старого текста от начала */
+            // 3.1 Ограничиваем буфер (обрезаем ~10% при переполнении)
             int len = logTextArea.getDocument().getLength();
             if (len > MAX_CHARS) {
                 try {
                     logTextArea.getDocument().remove(0, MAX_CHARS / 10);
-                } catch (javax.swing.text.BadLocationException ignored) { }
+                } catch (javax.swing.text.BadLocationException ignored) {
+                    // Ничего страшного — просто пропустим
+                }
             }
 
-            /* 3.2 Проверяем, находился ли пользователь внизу текста.
-                   Если да — автоскроллим; если листал вверх — caret не прыгает. */
+            // 3.2 Проверяем, был ли пользователь внизу окна
             boolean atBottom = logTextArea.getCaretPosition() >= len - 1;
 
-            /* 3.3 Добавляем новое сообщение */
+            // 3.3 Добавляем новую строку
             logTextArea.append(message + System.lineSeparator());
 
+            // 3.4 Автопрокрутка вниз
             if (atBottom) {
                 logTextArea.setCaretPosition(logTextArea.getDocument().getLength());
             }
         };
 
-        // Вызываем updateUI в правильном потоке
+        // 4. Запускаем обновление в правильном потоке
         if (SwingUtilities.isEventDispatchThread()) {
             updateUI.run();
         } else {
             SwingUtilities.invokeLater(updateUI);
         }
     }
+
 }
