@@ -1,6 +1,5 @@
 package org.randomfetcher;
 
-
 import org.apache.commons.math3.distribution.ChiSquaredDistribution;
 import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.distribution.UniformRealDistribution;
@@ -168,4 +167,5 @@ public class RandomnessTester {
         int n = copy.size();
         return (n % 2 == 0) ? (copy.get(n / 2 - 1) + copy.get(n / 2)) / 2.0 : copy.get(n / 2);
     }
+
 }
