@@ -19,6 +19,7 @@ public class OpenAIAnalyzer {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String apiKey = resolveApiKey();
+    private static final String MODEL = System.getProperty("openai.model", "gpt-4o-mini");
 
     public static String getApiKey() {
         return apiKey;
@@ -44,20 +45,20 @@ public class OpenAIAnalyzer {
 
     public static String analyze(List<Integer> bytes) throws Exception {
         ObjectNode root = JSON.createObjectNode();
-        root.put("model", "gpt-3.5-turbo");
-        root.put("max_tokens", 1050);
+        root.put("model", MODEL);
+        root.put("max_tokens", 1000);
 
         ArrayNode messages = JSON.createArrayNode();
         messages.addObject()
                 .put("role", "user")
                 .put("content", String.format("""
                         +Bytes (0–255) = %s
-                        +Give a ≤520-word summary of their basic randomness metrics (uniformity, chi² / KS, autocorr, runs).
+                        +Give a ≤1050-word summary of their basic randomness metrics (uniformity, chi² / KS, autocorr, runs. In Russian and English.).
                         +""", bytes));
         root.set("messages", messages);
 
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.openai.com/v1/chat/completions"))
+                .uri(URI.create("https://api.openai.com/v1/chat/completions"))  // TODO: migrate to /v1/responses
                 .timeout(Duration.ofSeconds(30))
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
@@ -67,8 +68,9 @@ public class OpenAIAnalyzer {
         HttpResponse<String> resp =
                 HTTP.send(req, HttpResponse.BodyHandlers.ofString());
 
-        if (resp.statusCode() != 200)
-            throw new RuntimeException("OpenAI API error (" + resp.statusCode() + "): " + resp.body());
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException("OpenAI API error (" + resp.statusCode() + "): " + truncate(resp.body(), 500));
+        }
 
         return JSON.readTree(resp.body())
                 .path("choices").get(0)
@@ -76,4 +78,7 @@ public class OpenAIAnalyzer {
                 .asText().trim();
     }
 
+    private static String truncate(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max) + "…";
+    }
 }

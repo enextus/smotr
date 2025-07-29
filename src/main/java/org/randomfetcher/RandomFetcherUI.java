@@ -1,29 +1,38 @@
 package org.randomfetcher;
 
-import org.jetbrains.annotations.NotNull;
-
 import javax.swing.*;
 import java.awt.*;
 import java.io.Serial;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 /**
- * Simple Swing front‑end for QRNG demo.
+ * Updated Swing front‑end for QRNG demo.
+ * <p>
+ * Changes vs. v1:
+ * <ul>
+ *   <li>Correct initialisation (initUI() is now public and always called on EDT).</li>
+ *   <li>All long‑running tasks migrated to {@link SwingWorker} for proper threading.</li>
+ *   <li>Null‑checks via {@link Objects#requireNonNull(Object)}.</li>
+ *   <li>Tiny clean‑ups & small UX tweaks.</li>
+ * </ul>
  */
-@SuppressWarnings({"serial","initialization"})
+@SuppressWarnings({"serial", "initialization"})
 public class RandomFetcherUI extends JFrame {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    // GUI components (transient to avoid serialization issues)
-    private transient final JComboBox<Integer> hundreds = new JComboBox<>();
-    private transient final JComboBox<Integer> tens     = new JComboBox<>();
-    private transient final JComboBox<Integer> units    = new JComboBox<>();
-    private transient final JLabel statusLbl           = new JLabel(LBL_DEFAULT);
-    private transient final JLabel countLbl            = new JLabel("016", SwingConstants.CENTER);
-    private transient final JTextField urlField         = new JTextField(30);
+    /* -------------------- UI widgets -------------------- */
+    private final JComboBox<Integer> hundreds = new JComboBox<>();
+    private final JComboBox<Integer> tens     = new JComboBox<>();
+    private final JComboBox<Integer> units    = new JComboBox<>();
+
+    private final JLabel  statusLbl = new JLabel(LBL_DEFAULT);
+    private final JLabel  countLbl  = new JLabel("016", SwingConstants.CENTER);
+    private final JTextField urlField = new JTextField(30);
 
     private final JButton clearBtn   = new JButton("Clear");
     private final JButton logsBtn    = new JButton("Show Logs");
@@ -31,41 +40,36 @@ public class RandomFetcherUI extends JFrame {
     private final JButton analyseBtn = new JButton("Analyse");
 
     private final LogManager logManager;
-    private List<Integer> lastSequence = Collections.emptyList();
 
-    // Window size and default status text
+    private volatile List<Integer> lastSequence = Collections.emptyList();
+
+    /* ---- constants ---- */
     private static final int WIDTH = 580, HEIGHT = 190;
     private static final String LBL_DEFAULT = "Select amount & press Get QRNG";
 
+    /* ==================================================== */
     public RandomFetcherUI(LogManager logManager) {
-        this.logManager = logManager;
-        // no UI initialization here to avoid "this-escape" warning
+        this.logManager = Objects.requireNonNull(logManager);
     }
 
-    /**
-     * Static factory: create and display on EDT.
-     */
+    /** Entry helper: build and show UI on EDT. */
     public static void createAndShow(LogManager manager) {
-        SwingUtilities.invokeLater(() -> {
+        EventQueue.invokeLater(() -> {
             RandomFetcherUI ui = new RandomFetcherUI(manager);
             ui.initUI();
             ui.setVisible(true);
         });
-    }private void initUI() {
+    }
+
+    /** Initialises Swing components (call on EDT!). */
+    public void initUI() {
         setTitle("QRNG Demo");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(WIDTH, HEIGHT);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(5, 5));
 
-        // Name components for UI tests
-        qrngBtn.setName("btnGetQrng");
-        analyseBtn.setName("btnAnalyse");
-        logsBtn.setName("btnLogs");
-        clearBtn.setName("btnClear");
-        statusLbl.setName("statusLbl");
-
-        // Populate combo boxes
+        /* ---------- populate combos ---------- */
         for (int i = 0; i <= 9; i++) {
             hundreds.addItem(i);
             tens.addItem(i);
@@ -74,13 +78,12 @@ public class RandomFetcherUI extends JFrame {
         tens.setSelectedItem(1);
         units.setSelectedItem(6);
 
-        // Update count label
+        /* ---------- selectors ---------- */
         Runnable updateCount = () -> countLbl.setText(String.format("%03d", getSelectedCount()));
         hundreds.addActionListener(e -> updateCount.run());
-        tens.addActionListener(e    -> updateCount.run());
-        units.addActionListener(e   -> updateCount.run());
+        tens.addActionListener(e -> updateCount.run());
+        units.addActionListener(e -> updateCount.run());
 
-        // Top selector panel
         JPanel selector = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         selector.add(hundreds); selector.add(new JLabel("×100"));
         selector.add(tens);     selector.add(new JLabel("×10"));
@@ -88,19 +91,20 @@ public class RandomFetcherUI extends JFrame {
 
         countLbl.setFont(new Font("Monospaced", Font.BOLD, 28));
         countLbl.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
+
         JPanel topRow = new JPanel(new BorderLayout());
         topRow.add(selector, BorderLayout.WEST);
-        topRow.add(countLbl, BorderLayout.EAST);
+        topRow.add(countLbl,  BorderLayout.EAST);
 
-        // Center area
-        JPanel center = new JPanel(new BorderLayout(5, 5));
+        /* ---------- centre ---------- */
+        JPanel centre = new JPanel(new BorderLayout(5, 5));
         attachPopup(urlField);
-        center.add(topRow, BorderLayout.NORTH);
-        center.add(urlField, BorderLayout.CENTER);
-        center.add(statusLbl, BorderLayout.SOUTH);
-        add(center, BorderLayout.CENTER);
+        centre.add(topRow, BorderLayout.NORTH);
+        centre.add(urlField, BorderLayout.CENTER);
+        centre.add(statusLbl, BorderLayout.SOUTH);
+        add(centre, BorderLayout.CENTER);
 
-        // Buttons panel
+        /* ---------- buttons ---------- */
         JPanel east = new JPanel(new GridLayout(4, 1, 5, 5));
         east.add(qrngBtn);
         east.add(analyseBtn);
@@ -108,7 +112,7 @@ public class RandomFetcherUI extends JFrame {
         east.add(clearBtn);
         add(east, BorderLayout.EAST);
 
-        // Handlers
+        /* ---------- actions ---------- */
         clearBtn.addActionListener(e -> {
             urlField.setText("");
             setStatus(LBL_DEFAULT);
@@ -125,38 +129,44 @@ public class RandomFetcherUI extends JFrame {
         analyseBtn.addActionListener(e -> showAnalysis());
     }
 
+    /* ==================================================== */
     private void runQRNG() {
-        int count = getSelectedCount();
+        final int count = getSelectedCount();
         if (count == 0) {
             setStatus("Count must be > 0");
             return;
         }
-
         qrngBtn.setEnabled(false);
-        setStatus(String.format("Requesting %d random bytes…", count));
-        logManager.appendLog(String.format("QRNG request started (%d bytes)", count));
+        setStatus("Requesting " + count + " random bytes…");
+        logManager.appendLog("QRNG request started (" + count + " bytes)");
 
-        new Thread(() -> {
-            try {
+        SwingWorker<List<Integer>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<Integer> doInBackground() throws Exception {
                 int[] bytes = RandomFetcher.fetchBytes(count);
-                List<Integer> list = Arrays.stream(bytes).boxed().toList();
-                SwingUtilities.invokeLater(() -> {
-                    lastSequence = List.copyOf(list);
-                    urlField.setText(list.toString());
-                    setStatus(String.format("QRNG success (%d bytes)", count));
-                    logManager.appendLog(String.format("QRNG success: %s", list));
-                });
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> {
-                    setStatus(String.format("QRNG error: %s", ex.getMessage()));
-                    logManager.appendLog(String.format("QRNG error: %s", ex));
-                });
-            } finally {
-                SwingUtilities.invokeLater(() -> qrngBtn.setEnabled(true));
+                return Arrays.stream(bytes).boxed().toList();
             }
-        }, "QRNG-thread").start();
+
+            @Override
+            protected void done() {
+                try {
+                    lastSequence = get();
+                    urlField.setText(lastSequence.toString());
+                    setStatus("QRNG success (" + count + " bytes)");
+                    logManager.appendLog("QRNG success: " + lastSequence);
+                } catch (InterruptedException | ExecutionException ex) {
+                    setStatus("QRNG error: " + ex.getMessage());
+                    logManager.appendLog("QRNG error: " + ex);
+                    Thread.currentThread().interrupt();
+                } finally {
+                    qrngBtn.setEnabled(true);
+                }
+            }
+        };
+        worker.execute();
     }
 
+    /* ==================================================== */
     private void showAnalysis() {
         if (lastSequence.isEmpty()) {
             JOptionPane.showMessageDialog(this,
@@ -165,40 +175,64 @@ public class RandomFetcherUI extends JFrame {
             return;
         }
 
-        new Thread(() -> {
-            try {
-                String report = buildLocalReport();
+        analyseBtn.setEnabled(false);
+
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                StringBuilder report = new StringBuilder(buildLocalReport());
                 try {
-                    String gptReport = OpenAIAnalyzer.analyze(lastSequence);
-                    logManager.appendLog("GPT-3.5 analysis done");
-                    report += """
-<h3>🤖 GPT-3.5-Turbo Summary</h3>
-<p style='max-width:600px; font-family: sans-serif;'>%s</p>
-""".formatted(gptReport);
+                    String gpt = OpenAIAnalyzer.analyze(lastSequence);
+                    logManager.appendLog("LLM analysis done");
+                    report.append("\n<h3>🤖 LLM Summary</h3><p style='max-width:600px; font-family: sans-serif;'>")
+                            .append(gpt)
+                            .append("</p>");
                 } catch (Exception ex) {
                     logManager.appendLog("LLM analysis failed: " + ex);
-                    report += """
-<h3>🤖 GPT-3.5-Turbo Summary</h3>
-<p style='color:red;'>⚠ Error getting LLM answer: %s</p>
-""".formatted(ex.getMessage());
+                    report.append("\n<h3>🤖 LLM Summary</h3><p style='color:red;'>⚠ Error: ")
+                            .append(ex.getMessage()).append("</p>");
                 }
-
-                String finalReport = """
-<html><body style='font-family: monospace;'><pre>%s</pre></body></html>
-""".formatted(report);
-
-                SwingUtilities.invokeLater(() -> showAnalysisWindow(finalReport));
-            } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
-                        String.format("Error analysing sequence: %s", ex.getMessage()),
-                        "Analyse", JOptionPane.ERROR_MESSAGE));
+                return "<html><body style='font-family: monospace;'><pre>" + report + "</pre></body></html>";
             }
-        }, "Analysis-thread").start();
+
+            @Override
+            protected void done() {
+                try {
+                    showAnalysisWindow(get());
+                } catch (InterruptedException | ExecutionException ex) {
+                    JOptionPane.showMessageDialog(RandomFetcherUI.this,
+                            "Error analysing sequence: " + ex.getMessage(),
+                            "Analyse", JOptionPane.ERROR_MESSAGE);
+                    Thread.currentThread().interrupt();
+                } finally {
+                    analyseBtn.setEnabled(true);
+                }
+            }
+        };
+        worker.execute();
     }
 
-    private @NotNull String buildLocalReport() {
+    /* ==================================================== */
+    int getSelectedCount() {
+        return hundreds.getSelectedIndex() * 100 + tens.getSelectedIndex() * 10 + units.getSelectedIndex();
+    }
+
+    static void attachPopup(JTextField f) {
+        JPopupMenu m = new JPopupMenu();
+        JMenuItem c = new JMenuItem("Copy"), p = new JMenuItem("Paste"), x = new JMenuItem("Cut");
+        c.addActionListener(e -> f.copy());
+        p.addActionListener(e -> f.paste());
+        x.addActionListener(e -> f.cut());
+        m.add(c); m.add(p); m.add(x);
+        f.setComponentPopupMenu(m);
+    }
+
+    void setStatus(String s) { statusLbl.setText(s); }
+
+    /* ==================================================== */
+    private String buildLocalReport() {
         RandomnessTester tester = new RandomnessTester(lastSequence, 0, 255);
-        return """
+        return String.format("""
 === Sequence analysis ===
 <b>Count:</b> %d
 <b>Kolmogorov–Smirnov (p > 0.05):</b> %s
@@ -207,15 +241,14 @@ public class RandomFetcherUI extends JFrame {
 <b>Autocorr (lag 1):</b> %.4f
 <b>Max consecutive repeats:</b> %d
 <b>CRC-32:</b> 0x%X
-""".formatted(
+""",
                 lastSequence.size(),
                 tester.kolmogorovSmirnovTest(0.05) ? "Passed" : "Failed",
                 tester.chiSquareTest(8, 0.05)      ? "Passed" : "Failed",
                 tester.runsTest(0.05)              ? "Passed" : "Failed",
                 tester.autocorrelation(1),
                 tester.countConsecutiveRepeats(),
-                tester.crc32()
-        );
+                tester.crc32());
     }
 
     private void showAnalysisWindow(String html) {
@@ -231,35 +264,12 @@ public class RandomFetcherUI extends JFrame {
         dlg.setVisible(true);
     }
 
-    int getSelectedCount() {
-        // Null-safe unboxing
-        return 100 * safeGet(hundreds)
-                + 10  * safeGet(tens)
-                +       safeGet(units);
-    }
-
-    private static int safeGet(JComboBox<Integer> box) {
-        Integer v = (Integer) box.getSelectedItem();
-        return v != null ? v : 0;
-    }
-
-    static void attachPopup(JTextField f) {
-        JPopupMenu m = new JPopupMenu();
-        JMenuItem c = new JMenuItem("Copy"),
-                p = new JMenuItem("Paste"),
-                x = new JMenuItem("Cut");
-        c.addActionListener(e -> f.copy());
-        p.addActionListener(e -> f.paste());
-        x.addActionListener(e -> f.cut());
-        m.add(c); m.add(p); m.add(x);
-        f.setComponentPopupMenu(m);
-    }
-
-    void setStatus(String s) {
-        statusLbl.setText(s);
-    }
-
+    /* ==================================================== */
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new RandomFetcherUI(new LogManager()).setVisible(true));
+        EventQueue.invokeLater(() -> {
+            RandomFetcherUI ui = new RandomFetcherUI(new LogManager());
+            ui.initUI();
+            ui.setVisible(true);
+        });
     }
 }

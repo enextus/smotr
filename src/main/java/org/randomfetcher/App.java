@@ -1,6 +1,7 @@
 package org.randomfetcher;
 
 import javax.swing.SwingUtilities;
+import java.awt.*;
 
 /**
  * Точка входа в приложение.
@@ -9,30 +10,17 @@ import javax.swing.SwingUtilities;
 public class App {
 
     @SuppressWarnings("unused")
-    public static void main(String[] args) throws ClassNotFoundException {
+    public static void main(String[] args) {
+        // Регистрация драйвера SQLite не обязательна (DriverManager сам загрузит через SPI),
+        // но оставим на случай теневых ClassLoader'ов
+        try { Class.forName("org.sqlite.JDBC"); } catch (ClassNotFoundException ignored) { }
 
-        try {
-            // Регистрируем SQLite JDBC-драйвер вручную
-            Class.forName("org.sqlite.JDBC");
-
+        EventQueue.invokeLater(() -> {
             LogManager logManager = new LogManager();
             RandomFetcherUI ui = new RandomFetcherUI(logManager);
-
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        SwingUtilities.invokeLater(() -> {
-            // Менеджер логов (окно + SLF4J)
-            LogManager logManager = new LogManager();
-
-            // GUI с тремя кнопками
-            RandomFetcherUI ui = new RandomFetcherUI(logManager);
+            ui.initUI();                       // <-- ВАЖНО!
             ui.setVisible(true);
-
-            // Первая запись в лог
-            logManager.appendLog("Application started (QRNG-only GUI)");
+            logManager.appendLog("Application started");
         });
     }
 

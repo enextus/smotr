@@ -1,5 +1,11 @@
 package org.randomfetcher;
 
+
+import org.apache.commons.math3.distribution.ChiSquaredDistribution;
+import org.apache.commons.math3.distribution.NormalDistribution;
+import org.apache.commons.math3.distribution.UniformRealDistribution;
+import org.apache.commons.math3.stat.inference.KolmogorovSmirnovTest;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.CRC32;
@@ -17,20 +23,13 @@ import java.util.zip.CRC32;
  *      <li>Kolmogorov-Smirnov test for uniform distribution</li>
  *      <li>Chi-square test for uniformity</li>
  *  </ul>
- * All methods are <strong>side-effect-free</strong> and dependency-free.
+ * All methods are <strong>side-effect-free</strong>.
  */
 public class RandomnessTester {
     private final List<Integer> sequence;
     private final int minValue;
     private final int maxValue;
 
-    /**
-     * Конструктор класса RandomnessTester.
-     *
-     * @param sequence  Последовательность чисел для тестирования.
-     * @param minValue  Минимальное значение диапазона.
-     * @param maxValue  Максимальное значение диапазона.
-     */
     public RandomnessTester(List<Integer> sequence, int minValue, int maxValue) {
         if (sequence == null || sequence.isEmpty()) {
             throw new IllegalArgumentException("Последовательность не должна быть пустой или null");
@@ -43,66 +42,35 @@ public class RandomnessTester {
         this.maxValue = maxValue;
     }
 
-    // =====================
-    //  СТАТИСТИЧЕСКИЕ ТЕСТЫ
-    // =====================
-
-    /**
-     * Тест Колмогорова–Смирнова на соответствие равномерному распределению.
-     *
-     * @param alpha уровень значимости (обычно 0.05)
-     * @return {@code true} если гипотеза о равномерном распределении не отвергается
-     */
     public boolean kolmogorovSmirnovTest(double alpha) {
-        List<Integer> sorted = new ArrayList<>(sequence);
-        Collections.sort(sorted);
-        int n = sequence.size();
-        double dMax = 0;
+        double range = (maxValue - minValue + 1.0);
+        double[] data = sequence.stream()
+                .mapToDouble(v -> (v - minValue + 0.5) / range)
+                .toArray();
 
-        // Empirical CDF vs. uniform CDF
-        for (int i = 0; i < n; i++) {
-            double x = sorted.get(i);
-            double empiricalCdf = (i + 1.0) / n;
-            double uniformCdf = (x - minValue) / (maxValue - minValue + 1.0);
-            dMax = Math.max(dMax, Math.abs(empiricalCdf - uniformCdf));
-        }
-
-        // Approximate critical value for KS test
-        double criticalValue = Math.sqrt(-0.5 * Math.log(alpha / 2.0)) / Math.sqrt(n);
-        return dMax < criticalValue;
+        KolmogorovSmirnovTest ks = new KolmogorovSmirnovTest();
+        return !ks.kolmogorovSmirnovTest(new UniformRealDistribution(0, 1), data, alpha);
     }
 
-    /**
-     * Тест на равномерность (хи-квадрат).
-     *
-     * @param bins количество интервалов
-     * @param alpha уровень значимости
-     * @return {@code true} если последовательность проходит тест
-     */
     public boolean chiSquareTest(int bins, double alpha) {
+        if (bins < 2) throw new IllegalArgumentException("bins >= 2");
         int[] observed = new int[bins];
-        double range = (maxValue - minValue + 1) / (double) bins;
-        for (int value : sequence) {
-            int bin = Math.min((int) ((value - minValue) / range), bins - 1);
+        double step = (maxValue - minValue + 1.0) / bins;
+
+        for (int v : sequence) {
+            int bin = Math.min((int) ((v - minValue) / step), bins - 1);
             observed[bin]++;
         }
         double expected = (double) sequence.size() / bins;
-        double chiSquare = 0;
-        for (int obs : observed) {
-            chiSquare += Math.pow(obs - expected, 2) / expected;
+        double chiSq = 0d;
+        for (int o : observed) {
+            chiSq += (o - expected) * (o - expected) / expected;
         }
-
-        // Simplified critical value approximation for chi-square
-        double criticalValue = bins - 1 + 2 * Math.sqrt(bins - 1);
-        return chiSquare < criticalValue;
+        ChiSquaredDistribution dist = new ChiSquaredDistribution(bins - 1);
+        double critical = dist.inverseCumulativeProbability(1 - alpha);
+        return chiSq <= critical;
     }
 
-    /**
-     * Стандартная автокорреляция (Пирсона) для произвольного лага.
-     *
-     * @param lag смещение ≥1
-     * @return значение автокорреляции в диапазоне [-1; 1]
-     */
     public double autocorrelation(int lag) {
         if (lag <= 0 || lag >= sequence.size()) {
             throw new IllegalArgumentException("lag должен быть в диапазоне 1 .. size-1");
@@ -116,18 +84,10 @@ public class RandomnessTester {
         return variance == 0 ? 0 : autocorr / variance;
     }
 
-    /**
-     * Runs-test (Wald–Wolfowitz) – проверка случайности через количество серий.
-     * <p>Числа ≥ медианы – группа «B», ниже – группа «A».</p>
-     *
-     * @param alpha уровень значимости (обычно 0.05)
-     * @return {@code true} если последовательность проходит тест
-     */
     public boolean runsTest(double alpha) {
         double median = calcMedian();
         int runs = 1;
-        int n1 = 0; // B – ≥ median
-        int n0 = 0; // A – < median
+        int n1 = 0, n0 = 0;
 
         int prev = sequence.getFirst() >= median ? 1 : 0;
         if (prev == 1) n1++; else n0++;
@@ -144,16 +104,11 @@ public class RandomnessTester {
         double varianceRuns = (2.0 * n1 * n0 * (2.0 * n1 * n0 - n)) / (Math.pow(n, 2) * (n - 1));
         double z = Math.abs((runs - expectedRuns) / Math.sqrt(varianceRuns));
 
-        // Approximate critical value for z (standard normal, two-tailed)
-        double criticalZ = 1.96; // For alpha = 0.05
+        NormalDistribution nd = new NormalDistribution();
+        double criticalZ = nd.inverseCumulativeProbability(1 - alpha / 2.0);
         return z < criticalZ;
     }
 
-    /**
-     * Подсчёт максимальной длины цепочки подряд идущих одинаковых чисел.
-     *
-     * @return максимальная длина цепочки повторяющихся чисел
-     */
     public int countConsecutiveRepeats() {
         int maxRepeats = 1;
         int currentRepeats = 1;
@@ -168,15 +123,6 @@ public class RandomnessTester {
         return maxRepeats;
     }
 
-    // --------------------
-    //  МЕТОДЫ «ИНЖЕНЕРНЫЕ»
-    // --------------------
-
-    /**
-     * CRC-32 контрольная сумма последовательности (байтовая трактовка каждого int).
-     *
-     * @return 32-битное значение CRC в диапазоне 0 .. 0xFFFF_FFFFL
-     */
     public long crc32() {
         CRC32 crc = new CRC32();
         byte[] bytes = new byte[sequence.size()];
@@ -187,12 +133,6 @@ public class RandomnessTester {
         return crc.getValue();
     }
 
-    /**
-     * Поиск первой позиции вхождения под-последовательности.
-     *
-     * @param pattern список чисел для поиска
-     * @return индекс первого совпадения или –1, если под-последовательность не найдена
-     */
     public int findPattern(List<Integer> pattern) {
         if (pattern == null || pattern.isEmpty()) {
             throw new IllegalArgumentException("Pattern не должен быть null или пустым");
@@ -211,11 +151,6 @@ public class RandomnessTester {
         return -1;
     }
 
-    /**
-     * Карта «число → индексы появления» для всех значений, встречающихся ≥2 раза.
-     *
-     * @return {@link Map} где ключ – число, значение – read-only-список его позиций
-     */
     public Map<Integer, List<Integer>> duplicatePositions() {
         Map<Integer, List<Integer>> map = new HashMap<>();
         for (int i = 0; i < sequence.size(); i++) {
@@ -227,15 +162,10 @@ public class RandomnessTester {
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> List.copyOf(e.getValue())));
     }
 
-    // =====
-    //  Вспомогательные методы
-    // =====
-
     private double calcMedian() {
         List<Integer> copy = new ArrayList<>(sequence);
         Collections.sort(copy);
         int n = copy.size();
         return (n % 2 == 0) ? (copy.get(n / 2 - 1) + copy.get(n / 2)) / 2.0 : copy.get(n / 2);
     }
-
 }
