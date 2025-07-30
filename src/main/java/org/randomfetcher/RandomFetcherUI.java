@@ -256,8 +256,7 @@ public class RandomFetcherUI extends JFrame {
                         t.countConsecutiveRepeats(),
                         t.crc32());
 
-                /* --- 2) Формируем prompt для LLM, включая p‑values --- */
-                String prompt = """
+                        String prompt = """
 Bytes: %s
 %s
 На русском и английском, ≤150 слов на язык: 

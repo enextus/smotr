@@ -1,6 +1,5 @@
 package org.randomfetcher;
 
-import javax.swing.SwingUtilities;
 import java.awt.*;
 
 /**

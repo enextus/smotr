@@ -195,7 +195,16 @@ public final class LogManager {
         if (SwingUtilities.isEventDispatchThread()) {
             updateUI.run();
         } else {
-            SwingUtilities.invokeLater(updateUI);
+//            SwingUtilities.invokeLater(updateUI);
+            try {
+                // Синхронно, чтобы тест сразу увидел изменения,
+                // но без риска deadlock'а (EDT уже существует)
+                SwingUtilities.invokeAndWait(updateUI);
+            } catch (Exception ex) {
+                // fallback — асинхронно (не должно происходить, но на всякий случай)
+                SwingUtilities.invokeLater(updateUI);
+            }
+
         }
     }
 
