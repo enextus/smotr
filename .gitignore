@@ -16,12 +16,13 @@ config/*.key
 ### IntelliJ IDEA ###
 .idea/dictionaries/project.xml
 .idea/dataSources.xml
-.idea/dictionaries/project.xml
 .idea/misc.xml
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
 .idea/libraries/
+.idea/runConfigurations/run_sh.xml
+.idea/encodings.xml
 *.iws
 *.iml
 *.ipr
