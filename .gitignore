@@ -14,6 +14,7 @@ config/*.key
 .DS_Store
 
 ### IntelliJ IDEA ###
+.idea/*
 .idea/dictionaries/project.xml
 .idea/dataSources.xml
 .idea/misc.xml
