@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# shellcheck disable=SC2012
 JAR=$(ls "$DIR"/target/RandomFetcher-*-jar-with-dependencies.jar 2>/dev/null | head -n1)
 
 if [[ -z "$JAR" ]]; then
