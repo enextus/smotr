@@ -7,6 +7,7 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 
+
 /**
  * Класс для создания и управления графическим интерфейсом приложения.
  * Предоставляет поле для ввода URL, кнопки управления и отображение статуса загрузки.
@@ -50,6 +51,11 @@ public class VideoDownloaderUI extends JFrame {
         setTitle("Video Downloader");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(WIDTH, HEIGHT);
+
+        // Центр по монитору под курсором (а не по main-монитору):
+        setLocationByPlatform(false);
+        MonitorUtils.moveToMouseScreen(this);
+
         setLayout(new BorderLayout());
 
         // Панель ввода URL и статуса
@@ -122,8 +128,7 @@ public class VideoDownloaderUI extends JFrame {
             }
         });
 
-        // Центрирование окна
-        setLocationRelativeTo(null);
+        // Не центрируем по default screen — позиция уже выставлена по мыши.
     }
 
     /**

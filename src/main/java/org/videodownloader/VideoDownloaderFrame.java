@@ -12,7 +12,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -39,6 +42,8 @@ public class VideoDownloaderFrame extends JFrame {
     public static final String URL = "url: "; // Префикс для вывода URL
     public static final String ERROR3 = "Error"; // Заголовок ошибки 3
     public static final String ERROR_CREATING_DIRECTORY = "Error creating directory: "; // Ошибка создания папки
+
+
     public static final String COPY = "Copy"; // Копировать
     public static final String PASTE = "Paste"; // Вставить
     public static final String CUT = "Cut"; // Вырезать
@@ -76,7 +81,9 @@ public class VideoDownloaderFrame extends JFrame {
         setTitle(VIDEO_DOWNLOADER); // Устанавливаем заголовок окна
         setSize(WIDTH1, HEIGHT1); // Устанавливаем размер окна
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Закрытие приложения при закрытии окна
-        setLocationRelativeTo(null); // Центрируем окно на экране
+        // Центрируем на мониторе под курсором (а не на main-мониторе)
+        setLocationByPlatform(false);
+        MonitorUtils.moveToMouseScreen(this);
 
         // Создаем основную панель с BorderLayout
         JPanel panel = new JPanel();
