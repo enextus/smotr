@@ -1,3 +1,4 @@
+// src/main/java/org/videodownloader/App.java
 package org.videodownloader;
 
 import javax.swing.SwingUtilities;
@@ -60,3 +61,5 @@ public class App {
     }
 
 }
+
+// src/main/java/org/videodownloader/App.java

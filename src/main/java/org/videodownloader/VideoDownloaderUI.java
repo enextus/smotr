@@ -16,7 +16,7 @@ import java.io.IOException;
 public class VideoDownloaderUI extends JFrame {
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
     private static final int WIDTH = 700;
-    private static final int HEIGHT = 150;
+    private static final int HEIGHT = 600;
     private JTextField urlField;
     private JLabel statusLabel;
     private JButton downloadButton;
