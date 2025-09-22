@@ -1,5 +1,8 @@
 package org.videodownloader;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -7,10 +10,14 @@ import javax.swing.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.text.Normalizer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,22 +26,21 @@ public class VideoDownloadManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(VideoDownloadManager.class);
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download";
 
-    // активная папка загрузки как Path
     private Path outputDir = Paths.get(DEFAULT_OUTPUT_PATH);
-
-    // текущий процесс yt-dlp
     private volatile Process currentProcess;
 
-    // куда в итоге сохранили (парсим из вывода yt-dlp)
     private final AtomicReference<Path> lastSavedFile = new AtomicReference<>(null);
 
-    // паттерны под разные строки yt-dlp
+    // yt-dlp stdout patterns
     private static final Pattern YTDLP_DESTINATION =
             Pattern.compile("^\\[download\\] Destination: (.+)$");
     private static final Pattern YTDLP_ALREADY =
             Pattern.compile("^\\[download\\] (.+) has already been downloaded$");
     private static final Pattern YTDLP_MERGE =
             Pattern.compile("^\\[(?:Merger|ffmpeg)\\] Merging .*? into \"(.+)\"$");
+
+    // формат времени для имени файла
+    private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     public VideoDownloadManager() {
         LOGGER.info("VideoDownloadManager initialized. Default download folder: {}",
@@ -147,13 +153,18 @@ public class VideoDownloadManager {
             @Override
             protected Boolean doInBackground() {
                 publish("Trying yt-dlp...");
-                boolean success = tryYtDlp(url, outputDir);
+
+                // сформируем «умное» базовое имя один раз
+                String smartBase = buildSmartBaseName(url);
+                boolean success = tryYtDlp(url, outputDir, smartBase);
+
                 if (!success) {
                     publish("yt-dlp failed, trying direct download...");
                     String videoUrl = VideoExtractor.extractVideoUrl(url);
                     if (videoUrl != null) {
                         publish("Extracted video URL: " + videoUrl);
-                        success = tryYtDlp(videoUrl, outputDir);
+                        // на прямой URL попробуем тем же базовым именем
+                        success = tryYtDlp(videoUrl, outputDir, smartBase);
                         if (!success) {
                             publish("Direct download not implemented");
                             LOGGER.warn("Direct download not implemented for URL: {}", videoUrl);
@@ -195,15 +206,15 @@ public class VideoDownloadManager {
     }
 
     /** Попытка запустить yt-dlp. */
-    private boolean tryYtDlp(String videoUrl, Path dir) {
+    private boolean tryYtDlp(String videoUrl, Path dir, String smartBase) {
         lastSavedFile.set(null);
-        ProcessBuilder processBuilder = getProcessBuilder(videoUrl, dir);
+        ProcessBuilder processBuilder = getProcessBuilder(videoUrl, dir, smartBase);
         try {
             currentProcess = processBuilder.start();
             StringBuilder output = new StringBuilder();
 
             try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(currentProcess.getInputStream()))) {
+                    new InputStreamReader(currentProcess.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");
@@ -243,21 +254,125 @@ public class VideoDownloadManager {
         }
     }
 
-    /** Конструируем команду. */
-    private ProcessBuilder getProcessBuilder(String videoUrl, Path dir) {
-        // более устойчивый шаблон имени файла, без двойных .mp4
-        String outTpl = dir.resolve("%(id)s-%(title).128s.%(ext)s").toString();
+    /** Конструируем команду yt-dlp с нашим «умным» именем. */
+    private ProcessBuilder getProcessBuilder(String videoUrl, Path dir, String smartBase) {
+        // Мы задаём уже готовую «базу», расширение подставит yt-dlp.
+        // В Windows избегаем обратных слешей в шаблоне — используем resolve и toString().
+        String outTpl = dir.resolve(smartBase + ".%(ext)s").toString();
 
         ProcessBuilder pb = new ProcessBuilder(
                 "yt-dlp",
                 "--user-agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
                 videoUrl,
                 "-o", outTpl
         );
         pb.redirectErrorStream(true);
         LOGGER.debug("ProcessBuilder command: {}", pb.command());
         return pb;
+    }
+
+    /** Собрать «умную» базу имени файла. */
+    private String buildSmartBaseName(String pageUrl) {
+        String title = null;
+        try {
+            title = fetchPreferredTitle(pageUrl);
+        } catch (Exception e) {
+            LOGGER.debug("Title fetch failed: {}", e.toString());
+        }
+
+        if (title == null || title.isBlank()) {
+            title = fallbackFromUrl(pageUrl);
+        }
+
+        String cleaned = sanitizeForFilename(title);
+        if (cleaned.isBlank()) cleaned = "video";
+
+        // ограничим разумную длину (оставляя место под время и uuid)
+        if (cleaned.length() > 80) cleaned = cleaned.substring(0, 80).trim();
+
+        String ts = LocalDateTime.now().format(TS_FMT);
+        String uuid8 = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
+        // Итог: Title_YYYYMMDD_HHMMSS_UUID8
+        String base = cleaned + "_" + ts + "_" + uuid8;
+
+        // финальная страховка на предел длины имени (Windows ~255)
+        if (base.length() > 180) {
+            base = base.substring(0, 180);
+        }
+        return base;
+    }
+
+    /** Получаем «лучший» заголовок страницы: og:title → twitter:title → <title>. */
+    private String fetchPreferredTitle(String url) throws IOException {
+        Document doc = Jsoup.connect(url)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36")
+                .timeout(15000)
+                .get();
+
+        // 1) og:title
+        Element og = doc.selectFirst("meta[property=og:title], meta[name=og:title]");
+        if (og != null) {
+            String content = og.attr("content");
+            if (content != null && !content.isBlank()) return content;
+        }
+
+        // 2) twitter:title
+        Element tw = doc.selectFirst("meta[name=twitter:title]");
+        if (tw != null) {
+            String content = tw.attr("content");
+            if (content != null && !content.isBlank()) return content;
+        }
+
+        // 3) обычный title
+        String title = doc.title();
+        if (title != null && !title.isBlank()) {
+            return title;
+        }
+        return null;
+    }
+
+    /** Фолбэк имя из URL (последний сегмент пути, без query/frag). */
+    private String fallbackFromUrl(String url) {
+        try {
+            URI u = new URI(url);
+            String path = u.getPath();
+            if (path != null && !path.isBlank()) {
+                String seg = path.substring(path.lastIndexOf('/') + 1);
+                // иногда сегмент пуст — попробуем хост
+                if (seg == null || seg.isBlank()) seg = u.getHost();
+                // уберём расширение если есть
+                int dot = seg.lastIndexOf('.');
+                if (dot > 0) seg = seg.substring(0, dot);
+                return URLDecoder.decode(seg, StandardCharsets.UTF_8);
+            }
+            return u.getHost() != null ? u.getHost() : "video";
+        } catch (Exception e) {
+            return "video";
+        }
+    }
+
+    /** Санитизация строки под безопасное имя файла. */
+    private String sanitizeForFilename(String s) {
+        if (s == null) return "";
+        String normalized = Normalizer.normalize(s, Normalizer.Form.NFKC);
+
+        // заменим запрещённые/опасные символы
+        String cleaned = normalized
+                .replaceAll("[\\\\/:*?\"<>|]", " ")   // win-forbidden
+                .replaceAll("[\\p{Cntrl}]", " ")      // control chars
+                .replaceAll("\\s+", " ")              // collapse spaces
+                .trim();
+
+        // заменим пробелы на подчёркивания для стабильности
+        cleaned = cleaned.replace(' ', '_');
+
+        // ещё немного почистим «мусорные» последовательности
+        cleaned = cleaned.replaceAll("_+", "_");
+        cleaned = cleaned.replaceAll("^_+|_+$", "");
+
+        return cleaned;
     }
 
     /** Отмена загрузки. */

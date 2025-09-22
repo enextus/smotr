@@ -30,11 +30,9 @@ public class App {
     private JProgressBar progressBar;
 
     private volatile boolean downloading = false;
+    private volatile String lastAnnouncedPath = null; // чтобы не спамить "Saved to: ..."
 
     private VideoDownloadManager manager;
-
-    // анти-дубликат для "Saved to:"
-    private volatile String lastShownSavedPath = null;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new App().start());
@@ -61,6 +59,7 @@ public class App {
                 System.exit(0);
             }
         });
+
         frame.setMinimumSize(new Dimension(900, 540));
 
         JPanel root = new JPanel(new BorderLayout(12, 12));
@@ -111,7 +110,7 @@ public class App {
         top.add(chooseFolderBtn, gc);
 
         openFolderBtn = new JButton("Open");
-        openFolderBtn.setToolTipText("Открыть папку в проводнике");
+        openFolderBtn.setToolTipText("Открыть папку в проводнике (Ctrl+O)");
         gc.gridx = 3; gc.gridy = 1; gc.weightx = 0;
         top.add(openFolderBtn, gc);
 
@@ -149,17 +148,19 @@ public class App {
             System.exit(0);
             return;
         }
-        folderField.setText(manager.getSelectedOutputPath());
-        openFolderBtn.setEnabled(new File(manager.getSelectedOutputPath()).exists());
+        updateFolderUI();
 
         // Clipboard bootstrap: если в буфере уже лежит URL — подставим
         try {
             var cb = Toolkit.getDefaultToolkit().getSystemClipboard();
-            if (cb.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
-                String s = (String) cb.getData(DataFlavor.stringFlavor);
+            var t = cb.getContents(null);
+            if (t != null && t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                String s = (String) t.getTransferData(DataFlavor.stringFlavor);
                 if (looksLikeUrl(s)) urlField.setText(s.trim());
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // UnsupportedFlavorException / IllegalStateException и прочие — без критики.
+        }
 
         // Drag & Drop URL в поле
         new DropTarget(urlField, new DropTargetAdapter() {
@@ -174,10 +175,7 @@ public class App {
                         List<File> files = (List<File>) dtde.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
                         if (!files.isEmpty()) urlField.setText(files.get(0).toURI().toString());
                     }
-                } catch (Exception ignored) {
-                } finally {
-                    dtde.dropComplete(true); // корректно завершаем DnD-жест
-                }
+                } catch (Exception ignored) {}
             }
         });
 
@@ -198,8 +196,7 @@ public class App {
                 Path selected = chooser.getSelectedFile().toPath();
                 try {
                     manager.setSelectedOutputPath(selected.toString());
-                    folderField.setText(selected.toAbsolutePath().normalize().toString());
-                    openFolderBtn.setEnabled(new File(manager.getSelectedOutputPath()).exists());
+                    updateFolderUI();
                     appendStatus("Download folder set to: " + folderField.getText());
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(
@@ -211,18 +208,7 @@ public class App {
                 }
             }
         });
-        openFolderBtn.addActionListener(e -> {
-            try {
-                File f = Paths.get(manager.getSelectedOutputPath()).toFile();
-                if (!f.exists()) {
-                    JOptionPane.showMessageDialog(frame, "Папка не существует:\n" + f, "Нет папки", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                Desktop.getDesktop().open(f);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(frame, "Не удалось открыть папку:\n" + ex.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
-            }
-        });
+        openFolderBtn.addActionListener(e -> openFolderSafe());
 
         // Shortcuts
         frame.getRootPane().setDefaultButton(downloadBtn); // Enter = Download
@@ -241,13 +227,16 @@ public class App {
                 urlField.selectAll();
             }
         });
+        im.put(KeyStroke.getKeyStroke("control O"), "openFolder");
+        am.put("openFolder", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (!downloading) openFolderSafe();
+            }
+        });
 
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
-
-        // удобство: сразу фокус в поле URL
-        SwingUtilities.invokeLater(() -> urlField.requestFocusInWindow());
     }
 
     private void startDownload() {
@@ -259,25 +248,22 @@ public class App {
             return;
         }
 
-        // сбрасываем анти-дубликат перед новой загрузкой
-        lastShownSavedPath = null;
-
         setBusy(true);
         appendStatus("Starting download…");
+        lastAnnouncedPath = null;
 
         manager.downloadVideo(url, new DownloadListener() {
             @Override public void onStatusUpdate(String status) {
-                // Простейший парсер прогресса из текста, если когда-то начнёте прокидывать его из менеджера
                 maybeUpdateProgress(status);
                 appendStatus(status);
 
-                var saved = manager.getLastSavedFile(); // нужен соответствующий геттер в менеджере
+                var saved = manager.getLastSavedFile();
                 if (saved != null) {
                     String full = saved.toAbsolutePath().normalize().toString();
-                    if (!full.equals(lastShownSavedPath)) {
-                        lastShownSavedPath = full;
+                    if (!full.equals(lastAnnouncedPath)) {
                         appendStatus("Saved to: " + full);
                         copyToClipboard(full);
+                        lastAnnouncedPath = full;
                     }
                 }
 
@@ -294,7 +280,7 @@ public class App {
         downloadBtn.setEnabled(!busy);
         cancelBtn.setEnabled(busy);
         chooseFolderBtn.setEnabled(!busy);
-        openFolderBtn.setEnabled(!busy);
+        openFolderBtn.setEnabled(!busy && new File(manager.getSelectedOutputPath()).exists());
         urlField.setEnabled(!busy);
         progressBar.setIndeterminate(busy);
         progressBar.setString(busy ? "Working…" : "");
@@ -302,6 +288,26 @@ public class App {
             progressBar.setIndeterminate(false);
             progressBar.setValue(0);
             progressBar.setString("");
+        }
+    }
+
+    private void updateFolderUI() {
+        String path = manager.getSelectedOutputPath();
+        folderField.setText(Paths.get(path).toAbsolutePath().normalize().toString());
+        openFolderBtn.setEnabled(new File(path).exists());
+    }
+
+    private void openFolderSafe() {
+        try {
+            File f = Paths.get(manager.getSelectedOutputPath()).toFile();
+            if (!f.exists()) {
+                JOptionPane.showMessageDialog(frame, "Папка не существует:\n" + f, "Нет папки", JOptionPane.WARNING_MESSAGE);
+                updateFolderUI();
+                return;
+            }
+            Desktop.getDesktop().open(f);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(frame, "Не удалось открыть папку:\n" + ex.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -322,13 +328,11 @@ public class App {
         }
     }
 
-    /** Пытаемся выдрать проценты из строки статуса, если когда-нибудь пойдёт поток от yt-dlp */
+    /** Пробуем вытащить проценты из строки статуса (например, если yt-dlp пробрасывает прогресс). */
     private void maybeUpdateProgress(String status) {
-        // Примеры yt-dlp: "[download]  42.5% of 123.45MiB at 3.21MiB/s ETA 00:10"
         String s = status.trim();
         int i = s.indexOf('%');
         if (i > 0) {
-            // найдём начало числа перед '%'
             int j = i - 1;
             while (j >= 0 && (Character.isDigit(s.charAt(j)) || s.charAt(j) == '.')) j--;
             try {
