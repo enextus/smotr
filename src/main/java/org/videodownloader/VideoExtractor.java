@@ -3,100 +3,106 @@ package org.videodownloader;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.devtools.DevTools;
-import org.openqa.selenium.devtools.v136.network.Network;
+import org.openqa.selenium.devtools.v136.network.Network; // версия CDP может быть 135/136/137 — оставьте одну
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Класс для извлечения URL видео из веб-страниц.
- * Использует Jsoup для парсинга HTML и Selenium для обработки динамического контента.
- */
 public class VideoExtractor {
     private static final Logger LOGGER = LoggerFactory.getLogger(VideoExtractor.class);
-    private static final String CHROMEDRIVER_PATH = "C:/opt/chromedriver/chromedriver.exe";
 
-    /**
-     * Извлекает URL видео из указанной страницы.
-     *
-     * @param pageUrl URL страницы
-     * @return URL видео или null, если не найдено
-     */
-    public static String extractVideoUrl(String pageUrl) {
-        System.setProperty("webdriver.chrome.driver", CHROMEDRIVER_PATH);
+    private static ChromeDriver createDriver() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless");
+        // современный headless на новых Chrome
+        options.addArguments("--headless=new");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.setAcceptInsecureCerts(true);
+        // НИЧЕГО не указываем про webdriver.chrome.driver — Selenium Manager сам подтянет верный драйвер
+        ChromeDriver driver = new ChromeDriver(options);
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(45));
+        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
+        return driver;
+    }
+
+    public static String extractVideoUrl(String pageUrl) {
         ChromeDriver driver = null;
         DevTools devTools = null;
 
         try {
-            driver = new ChromeDriver(options);
+            driver = createDriver();
             devTools = driver.getDevTools();
             devTools.createSession();
-            LOGGER.info("Selenium session started for URL: {}", pageUrl);
 
-            // Загружаем страницу
+            // Включаем перехват сети ДО загрузки страниц
+            devTools.send(Network.enable(Optional.empty(), Optional.empty(), Optional.empty()));
+
+            final AtomicReference<String> videoUrlRef = new AtomicReference<>(null);
+
+            // Слушаем ответ (надёжнее, чем только запросы). Ловим и mp4, и m3u8
+            devTools.addListener(Network.responseReceived(), resp -> {
+                String url = resp.getResponse().getUrl();
+                if ((url.contains(".mp4") || url.contains(".m3u8")) && !url.contains("remote_control.php")) {
+                    LOGGER.info("Captured media URL: {}", url);
+                    videoUrlRef.compareAndSet(null, url);
+                }
+            });
+
+            LOGGER.info("Selenium session started for URL: {}", pageUrl);
             driver.get(pageUrl);
+
+            // Быстрый жадный поиск embed до DevTools-эвентов
             String pageSource = driver.getPageSource();
             Document doc = Jsoup.parse(pageSource);
 
-            // Ищем embed URL
             String embedUrl = null;
             for (Element element : doc.select("a[href*=/embed/], iframe[src*=/embed/]")) {
-                embedUrl = element.attr(element.tagName().equals("a") ? "href" : "src");
+                embedUrl = element.hasAttr("href") ? element.attr("href") : element.attr("src");
                 if (embedUrl != null && !embedUrl.isEmpty()) {
-                    LOGGER.info("Found embed URL: {}", embedUrl);
                     break;
                 }
             }
 
             if (embedUrl == null) {
                 LOGGER.warn("No embed URL found on page: {}", pageUrl);
-                return null;
-            }
-
-            // Преобразуем относительный URL в абсолютный
-            embedUrl = makeAbsoluteUrl(pageUrl, embedUrl);
-            driver.get(embedUrl);
-
-            // Настраиваем перехват сетевых запросов
-            AtomicReference<String> videoUrlRef = new AtomicReference<>(null);
-            devTools.send(Network.enable(Optional.empty(), Optional.empty(), Optional.empty()));
-            devTools.addListener(Network.requestWillBeSent(), request -> {
-                String requestUrl = request.getRequest().getUrl();
-                LOGGER.debug("Intercepted request: {}", requestUrl);
-                if (requestUrl.contains(".mp4") && requestUrl.contains("?") && !requestUrl.contains("remote_control.php")) {
-                    LOGGER.info("Found direct video URL: {}", requestUrl);
-                    videoUrlRef.set(requestUrl);
-                }
-            });
-
-            // Ждём до 30 секунд для получения URL видео
-            long startTime = System.currentTimeMillis();
-            while (videoUrlRef.get() == null && (System.currentTimeMillis() - startTime) < 30_000) {
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    LOGGER.warn("Interrupted while waiting for video URL", e);
-                    return null;
-                }
-            }
-
-            String videoUrl = videoUrlRef.get();
-            if (videoUrl != null) {
-                LOGGER.info("Successfully extracted video URL: {}", videoUrl);
-                return videoUrl;
+                // Даже без embed попробуем подождать сеть главной страницы (автозапуск плеера)
             } else {
-                LOGGER.warn("No video URL found within 30 seconds for: {}", embedUrl);
+                embedUrl = makeAbsoluteUrl(pageUrl, embedUrl);
+                LOGGER.info("Found embed URL: {}", embedUrl);
+                driver.get(embedUrl);
+            }
+
+            // Страховка: толкнуть видео (если плеер ленится без юзер-жеста)
+            try {
+                driver.executeScript("""
+                  (() => {
+                    const v = document.querySelector('video');
+                    if (v) { v.muted = true; v.play().catch(()=>{}); }
+                  })();
+                """);
+            } catch (Exception ignore) {}
+
+            // Ожидаем сетевой медиа-URL до 30 сек
+            long until = System.currentTimeMillis() + 30_000;
+            while (videoUrlRef.get() == null && System.currentTimeMillis() < until) {
+                try { Thread.sleep(300); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
+
+            String media = videoUrlRef.get();
+            if (media != null) {
+                LOGGER.info("Successfully extracted media URL: {}", media);
+                return media;
+            } else {
+                LOGGER.warn("No media URL captured within timeout for: {}", embedUrl != null ? embedUrl : pageUrl);
                 return null;
             }
 
@@ -105,38 +111,22 @@ public class VideoExtractor {
             return null;
         } finally {
             if (devTools != null) {
-                try {
-                    devTools.send(Network.disable());
-                } catch (Exception e) {
-                    LOGGER.warn("Error disabling DevTools", e);
-                }
+                try { devTools.send(Network.disable()); } catch (Exception ignore) {}
             }
             if (driver != null) {
-                try {
-                    driver.quit();
-                } catch (Exception e) {
-                    LOGGER.warn("Error closing WebDriver", e);
-                }
+                try { driver.quit(); } catch (Exception ignore) {}
             }
             LOGGER.debug("Selenium session closed");
         }
     }
 
-    /**
-     * Преобразует относительный URL в абсолютный.
-     *
-     * @param baseUrl     базовый URL
-     * @param relativeUrl относительный URL
-     * @return абсолютный URL
-     */
     private static String makeAbsoluteUrl(String baseUrl, String relativeUrl) {
         try {
-            URI baseUri = new URI(baseUrl);
-            URI absoluteUri = baseUri.resolve(relativeUrl);
-            LOGGER.debug("Converted URL: {} -> {}", relativeUrl, absoluteUri);
-            return absoluteUri.toString();
+            URI base = new URI(baseUrl);
+            URI abs = base.resolve(relativeUrl);
+            return abs.toString();
         } catch (URISyntaxException e) {
-            LOGGER.warn("Error converting URL: {}", relativeUrl, e);
+            LOGGER.warn("URL resolve failed: {}", relativeUrl, e);
             return relativeUrl;
         }
     }

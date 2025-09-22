@@ -1,9 +1,13 @@
 package org.videodownloader;
 
+import java.awt.Component;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.*;
+import javax.swing.SwingWorker;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -22,22 +26,33 @@ import java.util.List;
 public class VideoDownloadManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(VideoDownloadManager.class);
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
-    private String selectedOutputPath;
+
+    /** Текущая папка для загрузки (единый источник истины) */
+    private Path outputDir;
+
     private Process currentProcess;
 
-    /**
-     * Конструктор класса VideoDownloadManager.
-     * Инициализирует путь для загрузки по умолчанию.
-     */
     public VideoDownloadManager() {
-        this.selectedOutputPath = DEFAULT_OUTPUT_PATH;
-        LOGGER.info("VideoDownloadManager initialized with output path: {}", selectedOutputPath);
+        this.outputDir = Paths.get(DEFAULT_OUTPUT_PATH);
+        LOGGER.info("VideoDownloadManager initialized. Default download folder: {}",
+                outputDir.toAbsolutePath().normalize());
+    }
+
+    /** Текущий путь для загрузки (как строка, для UI) */
+    public String getSelectedOutputPath() {
+        return outputDir.toString();
+    }
+
+    /** Установить путь для загрузки (из настроек/диалога) */
+    public void setSelectedOutputPath(String selectedOutputPath) {
+        this.outputDir = Paths.get(selectedOutputPath);
+        LOGGER.info("Output path updated to: {}", outputDir.toAbsolutePath().normalize());
     }
 
     /**
      * Запускает процесс загрузки видео.
      *
-     * @param url     URL видео для загрузки
+     * @param url      URL видео для загрузки
      * @param listener слушатель для обновления статуса
      */
     public void downloadVideo(String url, App.DownloadListener listener) {
@@ -47,32 +62,26 @@ public class VideoDownloadManager {
             return;
         }
 
-        // Проверяем и создаём папку для загрузки
-        Path outputPath = Paths.get(selectedOutputPath);
-        if (!Files.exists(outputPath)) {
-            try {
-                Files.createDirectories(outputPath);
-                listener.onStatusUpdate("Created directory: " + outputPath);
-                LOGGER.info("Created output directory: {}", outputPath);
-            } catch (IOException e) {
-                listener.onStatusUpdate("Error creating directory: " + e.getMessage());
-                LOGGER.error("Failed to create directory: {}", outputPath, e);
-                return;
-            }
+        // Страховка: папку могли удалить после старта — создадим (без диалога)
+        try {
+            Files.createDirectories(outputDir);
+        } catch (IOException e) {
+            listener.onStatusUpdate("Error creating directory: " + e.getMessage());
+            LOGGER.error("Failed to (re)create directory: {}", outputDir, e);
+            return;
         }
 
-        // Выполняем загрузку в фоновом потоке
-        SwingWorker<Boolean, String> worker = new SwingWorker<Boolean, String>() {
+        SwingWorker<Boolean, String> worker = new SwingWorker<>() {
             @Override
             protected Boolean doInBackground() {
                 publish("Trying yt-dlp...");
-                boolean success = tryYtDlp(url, outputPath);
+                boolean success = tryYtDlp(url, outputDir);
                 if (!success) {
                     publish("yt-dlp failed, trying direct download...");
                     String videoUrl = VideoExtractor.extractVideoUrl(url);
                     if (videoUrl != null) {
                         publish("Extracted video URL: " + videoUrl);
-                        success = tryYtDlp(videoUrl, outputPath);
+                        success = tryYtDlp(videoUrl, outputDir);
                         if (!success) {
                             publish("Direct download not implemented");
                             LOGGER.warn("Direct download not implemented for URL: {}", videoUrl);
@@ -111,15 +120,16 @@ public class VideoDownloadManager {
      * Пытается загрузить видео с помощью yt-dlp.
      *
      * @param videoUrl  URL видео
-     * @param outputPath путь для сохранения
+     * @param outputDir путь для сохранения
      * @return true, если загрузка успешна, иначе false
      */
-    private boolean tryYtDlp(String videoUrl, Path outputPath) {
-        ProcessBuilder processBuilder = getProcessBuilder(videoUrl, outputPath);
+    private boolean tryYtDlp(String videoUrl, Path outputDir) {
+        ProcessBuilder processBuilder = getProcessBuilder(videoUrl, outputDir);
         try {
             currentProcess = processBuilder.start();
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(currentProcess.getInputStream()))) {
+            try (BufferedReader reader =
+                         new BufferedReader(new InputStreamReader(currentProcess.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");
@@ -149,35 +159,22 @@ public class VideoDownloadManager {
 
     /**
      * Создаёт ProcessBuilder для выполнения команды yt-dlp.
-     *
-     * @param videoUrl  URL видео
-     * @param outputPath путь для сохранения
-     * @return настроенный ProcessBuilder
      */
-    private ProcessBuilder getProcessBuilder(String videoUrl, Path outputPath) {
+    private ProcessBuilder getProcessBuilder(String videoUrl, Path outputDir) {
         ProcessBuilder pb = new ProcessBuilder(
                 "yt-dlp",
-                "--user-agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
                 videoUrl,
-                "-o",
-                outputPath.toString() + "/%(title)s.%(ext)s"
+                "-o", outputDir.resolve("%(title)s.%(ext)s").toString()
         );
         pb.redirectErrorStream(true);
         LOGGER.debug("ProcessBuilder command: {}", pb.command());
         return pb;
     }
 
-    /**
-     * Проверяет валидность URL.
-     *
-     * @param url URL для проверки
-     * @return true, если URL валиден, иначе false
-     */
+    /** Проверяет валидность URL. */
     private boolean isValidURL(String url) {
-        if (url == null || url.trim().isEmpty()) {
-            return false;
-        }
+        if (url == null || url.trim().isEmpty()) return false;
         try {
             URI uri = new URI(url);
             uri.parseServerAuthority();
@@ -189,9 +186,7 @@ public class VideoDownloadManager {
         }
     }
 
-    /**
-     * Отменяет текущую загрузку, если она выполняется.
-     */
+    /** Отменяет текущую загрузку, если она выполняется. */
     public void cancelDownload() {
         if (currentProcess != null) {
             currentProcess.destroy();
@@ -199,23 +194,102 @@ public class VideoDownloadManager {
         }
     }
 
-    /**
-     * Возвращает текущий путь для загрузки.
-     *
-     * @return путь для сохранения файлов
-     */
-    public String getSelectedOutputPath() {
-        return selectedOutputPath;
-    }
+    // ====== Стартап-инициализация папки загрузок ======
 
     /**
-     * Устанавливает новый путь для загрузки.
-     *
-     * @param selectedOutputPath новый путь
+     * Проверяет/инициализирует папку загрузки при старте приложения.
+     * @param parent компонент-владелец для модальных диалогов (например, JFrame)
+     * @return true — если папка готова к работе; false — если пользователь отказался/ошибка.
      */
-    public void setSelectedOutputPath(String selectedOutputPath) {
-        this.selectedOutputPath = selectedOutputPath;
-        LOGGER.info("Output path updated to: {}", selectedOutputPath);
+    public boolean initOutputDirOnStartup(Component parent) {
+        if (isUsableDirectory(outputDir)) {
+            LOGGER.info("Using existing download folder: {}", outputDir.toAbsolutePath().normalize());
+            return true;
+        }
+
+        int choice = JOptionPane.showConfirmDialog(
+                parent,
+                "Папка для загрузок не найдена:\n" + outputDir.toAbsolutePath().normalize() +
+                        "\nСоздать её?",
+                "Папка загрузок",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE
+        );
+
+        if (choice == JOptionPane.YES_OPTION) {
+            try {
+                Files.createDirectories(outputDir);
+                if (isUsableDirectory(outputDir)) {
+                    LOGGER.info("Created and using download folder: {}", outputDir.toAbsolutePath().normalize());
+                    return true;
+                } else {
+                    LOGGER.warn("Created but not usable: {}", outputDir.toAbsolutePath().normalize());
+                }
+            } catch (IOException e) {
+                LOGGER.error("Failed to create download folder: {}", outputDir, e);
+                JOptionPane.showMessageDialog(
+                        parent,
+                        "Не удалось создать папку:\n" + outputDir.toAbsolutePath().normalize() +
+                                "\nОшибка: " + e.getMessage(),
+                        "Ошибка",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
+
+        // Предложим выбрать другую папку
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Выберите папку для загрузок");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+
+        while (true) {
+            int res = chooser.showOpenDialog(parent);
+            if (res != JFileChooser.APPROVE_OPTION) {
+                LOGGER.warn("User canceled download folder selection");
+                return false;
+            }
+            Path selected = chooser.getSelectedFile().toPath();
+            try {
+                Files.createDirectories(selected);
+                if (isUsableDirectory(selected)) {
+                    this.outputDir = selected;
+                    LOGGER.info("Using user-selected download folder: {}", selected.toAbsolutePath().normalize());
+                    return true;
+                } else {
+                    JOptionPane.showMessageDialog(
+                            parent,
+                            "Нельзя записывать в выбранную папку:\n" + selected.toAbsolutePath().normalize(),
+                            "Недостаточно прав",
+                            JOptionPane.WARNING_MESSAGE
+                    );
+                }
+            } catch (IOException e) {
+                LOGGER.error("Cannot create selected folder: {}", selected, e);
+                JOptionPane.showMessageDialog(
+                        parent,
+                        "Не удалось создать папку:\n" + selected.toAbsolutePath().normalize() +
+                                "\nОшибка: " + e.getMessage(),
+                        "Ошибка",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
     }
 
+    /** Годна ли папка: существует/директория/доступна для записи. */
+    private boolean isUsableDirectory(Path dir) {
+        try {
+            if (!Files.exists(dir)) return false;
+            if (!Files.isDirectory(dir)) return false;
+            if (!Files.isWritable(dir)) return false;
+            Path probe = dir.resolve(".write_probe.tmp");
+            Files.writeString(probe, "ok");
+            Files.deleteIfExists(probe);
+            return true;
+        } catch (IOException e) {
+            LOGGER.debug("Directory usability check failed for {}: {}", dir, e.toString());
+            return false;
+        }
+    }
 }
