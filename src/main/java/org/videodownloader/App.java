@@ -33,6 +33,9 @@ public class App {
 
     private VideoDownloadManager manager;
 
+    // анти-дубликат для "Saved to:"
+    private volatile String lastShownSavedPath = null;
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new App().start());
     }
@@ -43,7 +46,7 @@ public class App {
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowClosing(java.awt.event.WindowEvent e) {
-                if (downloading) {
+                if (downloading && manager != null) {
                     int ans = JOptionPane.showConfirmDialog(
                             frame,
                             "Загрузка ещё идёт. Действительно выйти?",
@@ -147,6 +150,7 @@ public class App {
             return;
         }
         folderField.setText(manager.getSelectedOutputPath());
+        openFolderBtn.setEnabled(new File(manager.getSelectedOutputPath()).exists());
 
         // Clipboard bootstrap: если в буфере уже лежит URL — подставим
         try {
@@ -170,7 +174,10 @@ public class App {
                         List<File> files = (List<File>) dtde.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
                         if (!files.isEmpty()) urlField.setText(files.get(0).toURI().toString());
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                } finally {
+                    dtde.dropComplete(true); // корректно завершаем DnD-жест
+                }
             }
         });
 
@@ -192,6 +199,7 @@ public class App {
                 try {
                     manager.setSelectedOutputPath(selected.toString());
                     folderField.setText(selected.toAbsolutePath().normalize().toString());
+                    openFolderBtn.setEnabled(new File(manager.getSelectedOutputPath()).exists());
                     appendStatus("Download folder set to: " + folderField.getText());
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(
@@ -237,14 +245,23 @@ public class App {
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+
+        // удобство: сразу фокус в поле URL
+        SwingUtilities.invokeLater(() -> urlField.requestFocusInWindow());
     }
 
     private void startDownload() {
         String url = urlField.getText().trim();
-        if (url.isEmpty()) {
-            JOptionPane.showMessageDialog(frame, "Введите URL.", "Нет URL", JOptionPane.WARNING_MESSAGE);
+        if (url.isEmpty() || !looksLikeUrl(url)) {
+            urlField.requestFocusInWindow();
+            urlField.selectAll();
+            JOptionPane.showMessageDialog(frame, "Введите корректный http/https URL.", "Некорректный URL", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // сбрасываем анти-дубликат перед новой загрузкой
+        lastShownSavedPath = null;
+
         setBusy(true);
         appendStatus("Starting download…");
 
@@ -253,6 +270,16 @@ public class App {
                 // Простейший парсер прогресса из текста, если когда-то начнёте прокидывать его из менеджера
                 maybeUpdateProgress(status);
                 appendStatus(status);
+
+                var saved = manager.getLastSavedFile(); // нужен соответствующий геттер в менеджере
+                if (saved != null) {
+                    String full = saved.toAbsolutePath().normalize().toString();
+                    if (!full.equals(lastShownSavedPath)) {
+                        lastShownSavedPath = full;
+                        appendStatus("Saved to: " + full);
+                        copyToClipboard(full);
+                    }
+                }
 
                 String s = status.toLowerCase();
                 if (s.contains("download complete") || s.contains("download failed")) {
@@ -316,5 +343,12 @@ public class App {
                 // оставим индикатор как есть
             }
         }
+    }
+
+    private void copyToClipboard(String text) {
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(text), null);
+        } catch (Exception ignored) {}
     }
 }
