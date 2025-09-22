@@ -32,6 +32,8 @@ import java.util.List;
 public class VideoDownloaderFrame extends JFrame {
     // Путь по умолчанию для сохранения загруженных видео
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
+    private Path outputDir = Paths.get(DEFAULT_OUTPUT_PATH);
+
 
     // Константы для сообщений пользователю и обработки ошибок
     public static final String DOWNLOAD_COMPLETE = "Download complete"; // Завершение загрузки
