@@ -45,3 +45,31 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Maven/Gradle
+target/.build/
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+.dist/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.idea/
+
+# OS / misc
+
+Thumbs.db
+
+# времянки/бэкапы
+*~
