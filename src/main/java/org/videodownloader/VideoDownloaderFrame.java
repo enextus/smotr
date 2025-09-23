@@ -32,7 +32,7 @@ import java.util.List;
 public class VideoDownloaderFrame extends JFrame {
     // Путь по умолчанию для сохранения загруженных видео
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
-    private Path outputDir = Paths.get(DEFAULT_OUTPUT_PATH);
+
 
 
     // Константы для сообщений пользователю и обработки ошибок
@@ -65,8 +65,8 @@ public class VideoDownloaderFrame extends JFrame {
     private final JTextField urlField; // Текстовое поле для ввода URL видео
     private JLabel infoLabel = null; // Метка для отображения статусных сообщений
     private String selectedOutputPath = DEFAULT_OUTPUT_PATH; // Текущая папка загрузки
-    private JFrame logFrame; // Окно для отображения логов (новое поле)
-    private JTextArea logTextArea; // Текстовая область для логов (новое поле)
+    private final JFrame logFrame; // Окно для отображения логов (новое поле)
+    private final JTextArea logTextArea; // Текстовая область для логов (новое поле)
 
     /**
      * Конструктор для VideoDownloaderFrame. Инициализирует компоненты интерфейса и настраивает layout.
@@ -208,14 +208,7 @@ public class VideoDownloaderFrame extends JFrame {
         JMenuItem cut = new JMenuItem(CUT); // Опция "Cut"
 
         // Определяем действия для каждого пункта меню
-        copy.addActionListener(e -> urlField.copy());
-        paste.addActionListener(e -> urlField.paste());
-        cut.addActionListener(e -> urlField.cut());
-
-        // Добавляем пункты в меню
-        popupMenu.add(copy);
-        popupMenu.add(paste);
-        popupMenu.add(cut);
+        VideoDownloaderUI.addActionListenerHelper(popupMenu, copy, paste, cut, urlField);
 
         // Прикрепляем меню к полю URL
         urlField.setComponentPopupMenu(popupMenu);
@@ -355,7 +348,7 @@ public class VideoDownloaderFrame extends JFrame {
         try {
             URI baseUri = new URI(baseUrl);
             URI absoluteUri = baseUri.resolve(relativeUrl);
-            logTextArea.append("Преобразован URL: " + relativeUrl + " -> " + absoluteUri.toString() + "\n"); // Логируем
+            logTextArea.append("Преобразован URL: " + relativeUrl + " -> " + absoluteUri + "\n"); // Логируем
             return absoluteUri.toString();
         } catch (URISyntaxException e) {
             infoLabel.setText("Ошибка при преобразовании URL: " + e.getMessage());

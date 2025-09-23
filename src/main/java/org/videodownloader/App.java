@@ -173,7 +173,7 @@ public class App {
                     } else if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
                         @SuppressWarnings("unchecked")
                         List<File> files = (List<File>) dtde.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
-                        if (!files.isEmpty()) urlField.setText(files.get(0).toURI().toString());
+                        if (!files.isEmpty()) urlField.setText(files.getFirst().toURI().toString());
                     }
                 } catch (Exception ignored) {}
             }
@@ -252,25 +252,23 @@ public class App {
         appendStatus("Starting download…");
         lastAnnouncedPath = null;
 
-        manager.downloadVideo(url, new DownloadListener() {
-            @Override public void onStatusUpdate(String status) {
-                maybeUpdateProgress(status);
-                appendStatus(status);
+        manager.downloadVideo(url, status -> {
+            maybeUpdateProgress(status);
+            appendStatus(status);
 
-                var saved = manager.getLastSavedFile();
-                if (saved != null) {
-                    String full = saved.toAbsolutePath().normalize().toString();
-                    if (!full.equals(lastAnnouncedPath)) {
-                        appendStatus("Saved to: " + full);
-                        copyToClipboard(full);
-                        lastAnnouncedPath = full;
-                    }
+            var saved = manager.getLastSavedFile();
+            if (saved != null) {
+                String full = saved.toAbsolutePath().normalize().toString();
+                if (!full.equals(lastAnnouncedPath)) {
+                    appendStatus("Saved to: " + full);
+                    copyToClipboard(full);
+                    lastAnnouncedPath = full;
                 }
+            }
 
-                String s = status.toLowerCase();
-                if (s.contains("download complete") || s.contains("download failed")) {
-                    SwingUtilities.invokeLater(() -> setBusy(false));
-                }
+            String s = status.toLowerCase();
+            if (s.contains("download complete") || s.contains("download failed")) {
+                SwingUtilities.invokeLater(() -> setBusy(false));
             }
         });
     }

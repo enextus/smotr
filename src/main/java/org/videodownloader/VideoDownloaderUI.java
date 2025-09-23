@@ -1,12 +1,14 @@
 package org.videodownloader;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
-
 
 /**
  * Класс для создания и управления графическим интерфейсом приложения.
@@ -17,24 +19,16 @@ public class VideoDownloaderUI extends JFrame {
     private static final String DEFAULT_OUTPUT_PATH = "C:/Videos_Download/";
     private static final int WIDTH = 700;
     private static final int HEIGHT = 250;
+
     private JTextField urlField;
     private JLabel statusLabel;
     private JButton downloadButton;
     private JButton clearButton;
-    private JButton openFolderButton;
-    private JButton selectFolderButton;
-    private JButton showLogsButton;
+
     private final VideoDownloadManager downloadManager;
     private final LogManager logManager;
-    private App.DownloadListener listener;
+    private final App.DownloadListener listener;
 
-    /**
-     * Конструктор класса VideoDownloaderUI.
-     *
-     * @param downloadManager менеджер загрузок
-     * @param logManager      менеджер логов
-     * @param listener        слушатель для обновления статуса (может быть null)
-     */
     public VideoDownloaderUI(VideoDownloadManager downloadManager, LogManager logManager, App.DownloadListener listener) {
         this.downloadManager = downloadManager;
         this.logManager = logManager;
@@ -61,8 +55,12 @@ public class VideoDownloaderUI extends JFrame {
         // Панель ввода URL и статуса
         JPanel inputPanel = new JPanel(new BorderLayout());
         urlField = new JTextField(30);
-        createAndSetPopupMenu();
         statusLabel = new JLabel("Enter the video URL");
+
+        // Контекстное меню (добавим позже Clear-экшен, чтобы reuse)
+        JPopupMenu popupMenu = buildPopupMenu();
+        urlField.setComponentPopupMenu(popupMenu);
+
         inputPanel.add(urlField, BorderLayout.CENTER);
         inputPanel.add(statusLabel, BorderLayout.SOUTH);
 
@@ -70,9 +68,9 @@ public class VideoDownloaderUI extends JFrame {
         JPanel buttonPanel = new JPanel(new GridLayout(5, 1, 5, 5));
         downloadButton = new JButton("Download");
         clearButton = new JButton("Clear");
-        openFolderButton = new JButton("Open Folder");
-        selectFolderButton = new JButton("Select Download Folder");
-        showLogsButton = new JButton("Show Logs");
+        JButton openFolderButton = new JButton("Open Folder");
+        JButton selectFolderButton = new JButton("Select Download Folder");
+        JButton showLogsButton = new JButton("Show Logs");
 
         buttonPanel.add(downloadButton);
         buttonPanel.add(clearButton);
@@ -84,7 +82,48 @@ public class VideoDownloaderUI extends JFrame {
         add(inputPanel, BorderLayout.CENTER);
         add(buttonPanel, BorderLayout.EAST);
 
-        // Обработчики событий
+        // --- Экшен очистки, хоткеи, enable/disable логика ---
+        Action clearUrlAction = new AbstractAction("Clear") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                urlField.setText("");
+                setStatus("Enter the video URL");
+                logManager.appendLog("URL field cleared");
+                urlField.requestFocusInWindow();
+            }
+        };
+        clearButton.setAction(clearUrlAction);
+        clearButton.setToolTipText("Очистить поле URL (Esc / Ctrl+L)");
+
+        // Обновляем контекстное меню, добавив пункт Clear (reuse экшена)
+        addClearToPopup(urlField.getComponentPopupMenu(), clearUrlAction);
+
+        // Хоткеи: Esc на поле; Ctrl+L глобально
+        urlField.getInputMap(JComponent.WHEN_FOCUSED)
+                .put(KeyStroke.getKeyStroke("ESCAPE"), "clear-url");
+        urlField.getActionMap().put("clear-url", clearUrlAction);
+
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("control L"), "clear-url-global");
+        getRootPane().getActionMap().put("clear-url-global", clearUrlAction);
+
+        // Триггеры включения/выключения Clear и Download
+        DocumentListener toggleButtons = new DocumentListener() {
+            private void toggle() {
+                boolean hasText = !urlField.getText().isBlank();
+                clearButton.setEnabled(hasText);
+                downloadButton.setEnabled(hasText);
+            }
+            @Override public void insertUpdate(DocumentEvent e) { toggle(); }
+            @Override public void removeUpdate(DocumentEvent e) { toggle(); }
+            @Override public void changedUpdate(DocumentEvent e) { toggle(); }
+        };
+        urlField.getDocument().addDocumentListener(toggleButtons);
+        // начальное состояние
+        clearButton.setEnabled(false);
+        downloadButton.setEnabled(false);
+
+        // --- Обработчики событий ---
         downloadButton.addActionListener(e -> {
             String url = urlField.getText().trim();
             if (url.isEmpty()) {
@@ -92,21 +131,27 @@ public class VideoDownloaderUI extends JFrame {
                 logManager.appendLog("Error: URL is empty");
                 return;
             }
-            downloadManager.downloadVideo(url, listener);
+            // Валидация URL (поддерживаем только http/https)
+            if (!VideoDownloaderFrame.isValidURL(url)) {
+                setStatus("Invalid URL");
+                logManager.appendLog("Error: Invalid URL: " + url);
+                return;
+            }
             setStatus("Starting download...");
+            downloadManager.downloadVideo(url, listener);
         });
 
-        clearButton.addActionListener(e -> {
-            urlField.setText("");
-            setStatus("Enter the video URL");
-            logManager.appendLog("URL field cleared");
-        });
+        // Кнопка уже привязана к clearUrlAction — отдельный listener не нужен.
 
         openFolderButton.addActionListener(e -> {
             try {
-                Desktop.getDesktop().open(new File(downloadManager.getSelectedOutputPath()));
-                setStatus("Folder opened: " + downloadManager.getSelectedOutputPath());
-                logManager.appendLog("Folder opened: " + downloadManager.getSelectedOutputPath());
+                String path = downloadManager.getSelectedOutputPath();
+                if (path == null || path.isBlank()) {
+                    path = DEFAULT_OUTPUT_PATH;
+                }
+                Desktop.getDesktop().open(new File(path));
+                setStatus("Folder opened: " + path);
+                logManager.appendLog("Folder opened: " + path);
             } catch (IOException ex) {
                 setStatus("Error opening folder: " + ex.getMessage());
                 logManager.appendLog("Error opening folder: " + ex.getMessage());
@@ -132,15 +177,21 @@ public class VideoDownloaderUI extends JFrame {
     }
 
     /**
-     * Создаёт и прикрепляет контекстное меню к полю URL.
-     * Поддерживает операции Copy, Paste, Cut.
+     * Базовое контекстное меню без Clear (добавим позже, когда будет Action).
      */
-    private void createAndSetPopupMenu() {
+    private JPopupMenu buildPopupMenu() {
         JPopupMenu popupMenu = new JPopupMenu();
         JMenuItem copy = new JMenuItem("Copy");
         JMenuItem paste = new JMenuItem("Paste");
         JMenuItem cut = new JMenuItem("Cut");
 
+        addActionListenerHelper(popupMenu, copy, paste, cut, urlField);
+        popupMenu.addSeparator(); // место для Clear
+
+        return popupMenu;
+    }
+
+    static void addActionListenerHelper(JPopupMenu popupMenu, JMenuItem copy, JMenuItem paste, JMenuItem cut, JTextField urlField) {
         copy.addActionListener(e -> urlField.copy());
         paste.addActionListener(e -> urlField.paste());
         cut.addActionListener(e -> urlField.cut());
@@ -148,8 +199,14 @@ public class VideoDownloaderUI extends JFrame {
         popupMenu.add(copy);
         popupMenu.add(paste);
         popupMenu.add(cut);
+    }
 
-        urlField.setComponentPopupMenu(popupMenu);
+    /**
+     * Добавляет пункт Clear в уже созданное контекстное меню, реиспользуя Action.
+     */
+    private void addClearToPopup(JPopupMenu popup, Action clearUrlAction) {
+        if (popup == null) return;
+        popup.add(new JMenuItem(clearUrlAction));
     }
 
     /**
@@ -169,22 +226,11 @@ public class VideoDownloaderUI extends JFrame {
     }
 
     /**
-     * Обновляет текст статуса в интерфейсе и уведомляет слушателя.
-     *
-     * @param status новое сообщение статуса
+     * Обновляет текст статуса в интерфейсе.
      */
     public void setStatus(String status) {
         statusLabel.setText(status);
     }
 
-    /**
-     * Устанавливает слушатель для обновления статуса.
-     * Используется для динамической привязки слушателя после создания UI.
-     *
-     * @param listener новый слушатель
-     */
-    public void setDownloadListener(App.DownloadListener listener) {
-        this.listener = listener;
-    }
 
 }

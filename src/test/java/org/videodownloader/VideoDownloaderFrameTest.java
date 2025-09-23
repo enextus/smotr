@@ -63,5 +63,4 @@ public class VideoDownloaderFrameTest {
         String longUrl = "https://www.example.com/" + "a".repeat(8000);
         assertTrue(VideoDownloaderFrame.isValidURL(longUrl)); // If you expect this to be a valid URL
     }
-
 }
