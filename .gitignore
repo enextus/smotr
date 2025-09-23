@@ -64,12 +64,19 @@ venv/
 .pytest_cache/
 .mypy_cache/
 
-# IDE
-.idea/
+
 
 # OS / misc
 
 Thumbs.db
 
-# времянки/бэкапы
+
+
+
+# IDE
+.idea/
+
+# ОС/прочее
+
+
 *~
