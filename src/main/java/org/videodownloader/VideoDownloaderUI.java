@@ -142,7 +142,6 @@ public class VideoDownloaderUI extends JFrame {
         });
 
         // Кнопка уже привязана к clearUrlAction — отдельный listener не нужен.
-
         openFolderButton.addActionListener(e -> {
             try {
                 String path = downloadManager.getSelectedOutputPath();
