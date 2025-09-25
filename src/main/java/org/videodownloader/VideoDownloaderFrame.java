@@ -10,6 +10,9 @@ import org.openqa.selenium.chrome.ChromeOptions;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
@@ -54,6 +57,7 @@ public class VideoDownloaderFrame extends JFrame {
     public static final String TITLE_S_EXT_S = "%(title)s.%(ext)s"; // Шаблон имени файла для yt-dlp
     public static final String ENTER_THE_VIDEO_URL = "Enter the video URL"; // Приглашение ввести URL
     public static final String CLEAR = "Clear"; // Очистить
+    public static final String LOAD = "Load"; // Загрузить из буфера обмена
     public static final String DOWNLOAD = "Download"; // Загрузить
     public static final String SELECT_DOWNLOAD_FOLDER = "Select Download Folder"; // Выбрать папку загрузки
     public static final String SHOW_LOGS = "Show Logs"; // Показать логи (новая константа)
@@ -76,6 +80,7 @@ public class VideoDownloaderFrame extends JFrame {
         JButton downloadButton;
         JButton clearButton;
         JButton openFolderButton;
+        JButton loadButton;
         JButton selectFolderButton;
         JButton showLogsButton; // Новая кнопка для показа логов
 
@@ -106,6 +111,10 @@ public class VideoDownloaderFrame extends JFrame {
             infoLabel.setText(ENTER_THE_VIDEO_URL); // Сбрасываем статусное сообщение
         });
 
+        // Инициализируем кнопку "Load" и определяем её действие
+        loadButton = new JButton(LOAD);
+        loadButton.addActionListener(e -> loadUrlFromClipboard());
+
         // Инициализируем кнопку "Открыть папку" и определяем её действие
         openFolderButton = new JButton("Открыть папку");
         openFolderButton.addActionListener(e -> {
@@ -130,9 +139,10 @@ public class VideoDownloaderFrame extends JFrame {
 
         // Создаем панель для кнопок с сеткой 5x1 (добавляем одну строку для новой кнопки)
         JPanel eastPanel = new JPanel();
-        eastPanel.setLayout(new GridLayout(5, 1)); // Изменяем с 4 на 5 строк
+        eastPanel.setLayout(new GridLayout(6, 1)); // Изменяем с 5 на 6 строк
         eastPanel.add(downloadButton); // Добавляем кнопку "Download"
         eastPanel.add(clearButton); // Добавляем кнопку "Clear"
+        eastPanel.add(loadButton); // Добавляем кнопку "Load"
         eastPanel.add(openFolderButton); // Добавляем кнопку "Открыть папку"
         eastPanel.add(selectFolderButton); // Добавляем кнопку "Select Download Folder"
         eastPanel.add(showLogsButton); // Добавляем новую кнопку "Show Logs"
@@ -175,6 +185,26 @@ public class VideoDownloaderFrame extends JFrame {
                 "Папка загрузки по умолчанию: " + DEFAULT_OUTPUT_PATH + "\n" +
                 "Введите URL видео для начала загрузки.\n";
         logTextArea.append(initialLog); // Добавляем начальное сообщение в лог
+    }
+
+    /**
+     * Загружает URL из буфера обмена в поле ввода.
+     */
+    private void loadUrlFromClipboard() {
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        try {
+            String clipboardText = (String) clipboard.getData(DataFlavor.stringFlavor);
+            if (clipboardText != null && !clipboardText.isBlank()) {
+                urlField.setText(clipboardText.trim());
+                infoLabel.setText("URL загружен из буфера обмена.");
+                logTextArea.append("URL загружен из буфера обмена: " + clipboardText + "\n");
+            } else {
+                infoLabel.setText("Буфер обмена пуст или не содержит текст.");
+            }
+        } catch (UnsupportedFlavorException | IOException ex) {
+            infoLabel.setText("Не удалось получить URL из буфера обмена.");
+            logTextArea.append("Ошибка чтения из буфера обмена: " + ex.getMessage() + "\n");
+        }
     }
 
     /**
