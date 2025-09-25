@@ -23,6 +23,7 @@ public class App {
     private JTextField urlField;
     private JTextField folderField;
     private JButton downloadBtn;
+    private JButton clearBtn;
     private JButton cancelBtn;
     private JButton chooseFolderBtn;
     private JButton openFolderBtn;
@@ -87,10 +88,16 @@ public class App {
         gc.gridx = 2; gc.gridy = 0; gc.weightx = 0;
         top.add(downloadBtn, gc);
 
+        clearBtn = new JButton("Clear");
+        clearBtn.setToolTipText("Очистить поле URL (Ctrl+Shift+L)");
+        clearBtn.setEnabled(false);
+        gc.gridx = 3; gc.gridy = 0;
+        top.add(clearBtn, gc);
+
         cancelBtn = new JButton("Cancel");
         cancelBtn.setEnabled(false);
         cancelBtn.setToolTipText("Остановить текущую загрузку (Esc)");
-        gc.gridx = 3; gc.gridy = 0;
+        gc.gridx = 4; gc.gridy = 0;
         top.add(cancelBtn, gc);
 
         // Row 1: Folder + Choose/Open
@@ -186,6 +193,7 @@ public class App {
             appendStatus("Cancel requested");
             setBusy(false);
         });
+        clearBtn.addActionListener(e -> clearUrlField());
         chooseFolderBtn.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Выберите папку для загрузок");
@@ -227,12 +235,26 @@ public class App {
                 urlField.selectAll();
             }
         });
+        im.put(KeyStroke.getKeyStroke("control shift L"), "clearUrl");
+        am.put("clearUrl", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (!downloading && urlField.isEnabled()) clearBtn.doClick();
+            }
+        });
         im.put(KeyStroke.getKeyStroke("control O"), "openFolder");
         am.put("openFolder", new AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) {
                 if (!downloading) openFolderSafe();
             }
         });
+
+        urlField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void toggle() { updateClearButtonState(); }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { toggle(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { toggle(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { toggle(); }
+        });
+        updateClearButtonState();
 
         frame.pack();
         frame.setLocationRelativeTo(null);
@@ -280,6 +302,7 @@ public class App {
         chooseFolderBtn.setEnabled(!busy);
         openFolderBtn.setEnabled(!busy && new File(manager.getSelectedOutputPath()).exists());
         urlField.setEnabled(!busy);
+        updateClearButtonState();
         progressBar.setIndeterminate(busy);
         progressBar.setString(busy ? "Working…" : "");
         if (!busy) {
@@ -287,6 +310,21 @@ public class App {
             progressBar.setValue(0);
             progressBar.setString("");
         }
+    }
+
+    private void clearUrlField() {
+        urlField.setText("");
+        urlField.requestFocusInWindow();
+        appendStatus("URL field cleared");
+        updateClearButtonState();
+    }
+
+    private void updateClearButtonState() {
+        if (clearBtn == null) return;
+        boolean hasText = !urlField.getText().isBlank();
+        boolean canInteract = !downloading && urlField.isEnabled();
+        clearBtn.setEnabled(hasText && canInteract);
+        downloadBtn.setEnabled(canInteract && hasText);
     }
 
     private void updateFolderUI() {
