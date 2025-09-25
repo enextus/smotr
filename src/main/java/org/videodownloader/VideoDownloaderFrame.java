@@ -208,10 +208,20 @@ public class VideoDownloaderFrame extends JFrame {
         JMenuItem cut = new JMenuItem(CUT); // Опция "Cut"
 
         // Определяем действия для каждого пункта меню
-        VideoDownloaderUI.addActionListenerHelper(popupMenu, copy, paste, cut, urlField);
+        addPopupMenuActions(popupMenu, copy, paste, cut, urlField);
 
         // Прикрепляем меню к полю URL
         urlField.setComponentPopupMenu(popupMenu);
+    }
+
+    private void addPopupMenuActions(JPopupMenu popupMenu, JMenuItem copy, JMenuItem paste, JMenuItem cut, JTextField urlField) {
+        copy.addActionListener(e -> urlField.copy());
+        paste.addActionListener(e -> urlField.paste());
+        cut.addActionListener(e -> urlField.cut());
+
+        popupMenu.add(copy);
+        popupMenu.add(paste);
+        popupMenu.add(cut);
     }
 
     /**
